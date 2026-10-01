@@ -37,10 +37,13 @@ public final class Ruleta {
     private final Random rnd = new Random();
 
     private Fase fase = Fase.INACTIVA;
-    private int[] pausas = new int[0];
-    private int paso;
+    private static final int TICKS_GIRO = 120;     // duración del giro (6 s)
     private int ticksEspera;
-    private int fotograma; // posición actual de la rueda (0-15), se conserva entre giros
+    private int tGiro;
+    private double anguloInicio, anguloTotal, anguloActual;
+    private int ultimoClavo;
+    private boolean redobleSonado;
+    private int fotograma; // fotograma actual de la rueda (0-47)
     private int ticksColor;
     private int pasoAnim;
 
@@ -84,23 +87,24 @@ public final class Ruleta {
         }
         reto = plantilla.crear(rnd, cfg);
 
-        // 3) Preparar la animación: 3 vueltas + lo que falte para caer en el sector
+        // 3) Preparar el giro: 4 vueltas + lo que falte para que el sector quede bajo la lengüeta
         fotograma = 0; // la animación de entrada termina en el fotograma 0
-        int pasos = 48 + Math.floorMod(sector.fotogramaFinal() - fotograma, 16);
-        pausas = new int[pasos];
-        for (int i = 0; i < pasos; i++) {
-            double t = i / (double) pasos;
-            pausas[i] = t < 0.45 ? 1 : 1 + (int) Math.round(Math.pow((t - 0.45) / 0.55, 2) * 9);
-        }
-        paso = 0;
+        anguloInicio = 0;
+        double destino = sector.fotogramaFinal() * Sector.GRADOS_POR_FOTOGRAMA;
+        anguloTotal = 360 * 4 + Math.floorMod((int) Math.round(destino - anguloInicio), 360);
+        anguloActual = anguloInicio;
+        ultimoClavo = clavo(anguloInicio);
+        tGiro = 0;
+        redobleSonado = false;
         ticksEspera = 0;
         pasoAnim = 0;
         fase = RuletaMod.config.ruedaVisual ? Fase.ENTRANDO : Fase.GIRANDO;
 
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             enviarTiempos(p, 0, 30, 0);
-            sonido(p, SoundEvents.NOTE_BLOCK_BELL, 0.8F, 0.6F);
+            if (!RuletaMod.config.ruedaVisual) sonido(p, SoundEvents.NOTE_BLOCK_BELL, 0.8F, 0.6F);
         }
+        sonidoRuleta(server, "inicio", 1.0F, 1.0F);
         broadcast(server, Component.literal("¡La ruleta está girando!").withStyle(ChatFormatting.YELLOW));
         return true;
     }
@@ -205,24 +209,50 @@ public final class Ruleta {
         }
     }
 
+    /** Clavo (separación entre colores) que acaba de pasar por la lengüeta. */
+    private static int clavo(double angulo) {
+        return (int) Math.floor((angulo + 22.5) / 45.0);
+    }
+
     private void tickGiro(MinecraftServer server) {
         if (ticksEspera > 0) {
             ticksEspera--;
             return;
         }
-        if (paso < pausas.length) {
-            fotograma = Math.floorMod(fotograma + 1, 16);
-            float progreso = paso / (float) pausas.length;
-            float tono = 0.7F + progreso * 1.1F;
+        tGiro++;
+        double x = Math.min(1.0, tGiro / (double) TICKS_GIRO);
+        double frenado = 1 - Math.pow(1 - x, 2.5);            // rápido al inicio, frena suave al final
+        anguloActual = anguloInicio + anguloTotal * frenado;
+        int nuevo = Math.floorMod((int) Math.round(anguloActual / Sector.GRADOS_POR_FOTOGRAMA), Sector.FOTOGRAMAS);
+        boolean cambio = nuevo != fotograma || tGiro == 1;
+        fotograma = nuevo;
+
+        if (cambio) {
             Component titulo = tituloRueda(fotograma);
             Component sub = Component.literal("★ Girando la ruleta ★").withStyle(ChatFormatting.GOLD);
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 enviarTitulo(p, titulo, sub);
-                sonido(p, SoundEvents.NOTE_BLOCK_HAT, 0.7F, tono);
             }
-            ticksEspera = pausas[paso] - 1;
-            paso++;
-        } else {
+        }
+
+        // "tic" cada vez que un clavo golpea la lengüeta
+        int c = clavo(anguloActual);
+        if (c != ultimoClavo) {
+            ultimoClavo = c;
+            float tono = 0.92F + rnd.nextFloat() * 0.16F;
+            if (RuletaMod.config.ruedaVisual) {
+                sonidoRuleta(server, "tick", 0.9F, tono);
+            } else {
+                for (ServerPlayer p : server.getPlayerList().getPlayers()) sonido(p, SoundEvents.NOTE_BLOCK_HAT, 0.7F, 1.4F);
+            }
+        }
+        if (!redobleSonado && x >= 0.72) {
+            redobleSonado = true;
+            sonidoRuleta(server, "redoble", 0.6F, 1.0F);
+        }
+
+        if (x >= 1.0) {
+            fotograma = sector.fotogramaFinal();
             mostrarColor(server);
         }
     }
@@ -234,10 +264,13 @@ public final class Ruleta {
         Component sub = subtituloSector();
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             enviarTiempos(p, 0, 40, 5);
-            enviarTitulo(p, tituloResaltado(true), sub);
-            sonido(p, SoundEvents.NOTE_BLOCK_BELL, 1.0F, 1.0F);
-            sonido(p, SoundEvents.NOTE_BLOCK_PLING, 1.0F, 1.5F);
+            enviarTitulo(p, tituloResaltado(0), sub);
+            if (!RuletaMod.config.ruedaVisual) {
+                sonido(p, SoundEvents.NOTE_BLOCK_BELL, 1.0F, 1.0F);
+                sonido(p, SoundEvents.NOTE_BLOCK_PLING, 1.0F, 1.5F);
+            }
         }
+        sonidoRuleta(server, "ganador", 1.0F, 1.0F);
         broadcast(server, Component.literal("La rueda cayó en ").withStyle(ChatFormatting.WHITE)
                 .append(Component.literal(sector.nombre).withStyle(sector.color, ChatFormatting.BOLD))
                 .append(Component.literal(" — dificultad ").withStyle(ChatFormatting.WHITE))
@@ -247,13 +280,12 @@ public final class Ruleta {
 
     private void tickColor(MinecraftServer server) {
         ticksColor++;
-        if (ticksColor % 5 == 0 && ticksColor < TICKS_MOSTRAR_COLOR) {
-            boolean resaltado = (ticksColor / 5) % 2 == 0;
-            Component titulo = tituloResaltado(resaltado);
+        if (ticksColor % 4 == 0 && ticksColor < TICKS_MOSTRAR_COLOR) {
+            int variante = (ticksColor / 4) % 2;   // los bombillos parpadean
+            Component titulo = tituloResaltado(variante);
             Component sub = subtituloSector();
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 enviarTitulo(p, titulo, sub);
-                if (resaltado) sonido(p, SoundEvents.NOTE_BLOCK_CHIME, 0.6F, 1.2F + sector.dificultad.estrellas * 0.1F);
             }
         }
         if (ticksColor >= TICKS_MOSTRAR_COLOR) {
@@ -272,17 +304,16 @@ public final class Ruleta {
             return Component.literal(Sector.glifoRueda(frame)).withStyle(ChatFormatting.WHITE);
         }
         // Modo texto: el color que está bajo el puntero
-        Sector s = Sector.values()[Math.floorMod(-(frame / 2), 8)];
+        Sector s = Sector.values()[Math.floorMod((int) -Math.round(anguloActual / 45.0), 8)];
         return Component.literal("» " + s.nombre + " «").withStyle(s.color, ChatFormatting.BOLD);
     }
 
-    private Component tituloResaltado(boolean resaltado) {
+    private Component tituloResaltado(int variante) {
         if (RuletaMod.config.ruedaVisual) {
-            String g = resaltado ? sector.glifoResaltado() : Sector.glifoRueda(sector.fotogramaFinal());
-            return Component.literal(g).withStyle(ChatFormatting.WHITE);
+            return Component.literal(sector.glifoResaltado(variante)).withStyle(ChatFormatting.WHITE);
         }
         return Component.literal("» " + sector.nombre + " «")
-                .withStyle(resaltado ? sector.color : ChatFormatting.WHITE, ChatFormatting.BOLD);
+                .withStyle(variante == 0 ? sector.color : ChatFormatting.WHITE, ChatFormatting.BOLD);
     }
 
     private Component subtituloSector() {
@@ -452,6 +483,17 @@ public final class Ruleta {
     private static void enviarTitulo(ServerPlayer p, Component titulo, Component subtitulo) {
         p.connection.send(new ClientboundSetSubtitleTextPacket(subtitulo));
         p.connection.send(new ClientboundSetTitleTextPacket(titulo));
+    }
+
+    /**
+     * Sonido propio del paquete de texturas (ruleta:tick, ruleta:inicio, ruleta:redoble, ruleta:ganador).
+     * Se usa /playsound para no depender de clases internas; cada jugador lo escucha en su posición.
+     */
+    private static void sonidoRuleta(MinecraftServer server, String nombre, float volumen, float tono) {
+        if (!RuletaMod.config.ruedaVisual) return;
+        String cmd = String.format(java.util.Locale.ROOT,
+                "execute as @a at @s run playsound ruleta:%s master @s ~ ~ ~ %.2f %.2f", nombre, volumen, tono);
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(), cmd);
     }
 
     /** Sonido que solo escucha ese jugador. */

@@ -26,14 +26,18 @@ public enum Sector {
         this.dificultad = dificultad;
     }
 
-    /** Fotograma (0-15) del paquete de texturas en el que este sector queda bajo el puntero. */
+    /** Fotogramas de giro en el paquete de texturas (7,5° cada uno). */
+    public static final int FOTOGRAMAS = 48;
+    public static final double GRADOS_POR_FOTOGRAMA = 360.0 / FOTOGRAMAS;
+
+    /** Fotograma en el que este sector queda justo bajo la lengüeta. */
     public int fotogramaFinal() {
-        return 2 * ((8 - ordinal()) % 8);
+        return Math.floorMod(FOTOGRAMAS - ordinal() * (FOTOGRAMAS / 8), FOTOGRAMAS);
     }
 
-    /** Carácter de la fuente: rueda girada (fotograma 0-15). */
+    /** Carácter de la fuente: rueda girada (fotograma 0-47). */
     public static String glifoRueda(int fotograma) {
-        return String.valueOf((char) (0xE000 + Math.floorMod(fotograma, 16)));
+        return String.valueOf((char) (0xE000 + Math.floorMod(fotograma, FOTOGRAMAS)));
     }
 
     public static final int FOTOGRAMAS_ENTRADA = 5;
@@ -41,16 +45,16 @@ public enum Sector {
 
     /** Animación de entrada: la rueda aparece creciendo y girando. */
     public static String glifoEntrada(int i) {
-        return String.valueOf((char) (0xE020 + i));
+        return String.valueOf((char) (0xE050 + i));
     }
 
     /** Animación de salida: la rueda con este sector resaltado se encoge. */
     public String glifoSalida(int i) {
-        return String.valueOf((char) (0xE030 + ordinal() * 8 + i));
+        return String.valueOf((char) (0xE060 + ordinal() * 8 + i));
     }
 
-    /** Carácter de la fuente: rueda con este sector resaltado. */
-    public String glifoResaltado() {
-        return String.valueOf((char) (0xE010 + ordinal()));
+    /** Rueda detenida con este sector resaltado. variante 0/1 = bombillos alternos. */
+    public String glifoResaltado(int variante) {
+        return String.valueOf((char) ((variante == 0 ? 0xE040 : 0xE048) + ordinal()));
     }
 }
