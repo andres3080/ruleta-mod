@@ -166,7 +166,6 @@ public enum RetoTipo {
             {Items.APPLE, "Manzana"},
             {Items.COBBLESTONE, "Roca"},
             {Items.FURNACE, "Horno"},
-            {Items.WHITE_WOOL, "Lana blanca"},
             {Items.IRON_INGOT, "Lingote de hierro"},
             {Items.STONE_PICKAXE, "Pico de piedra"},
     };
