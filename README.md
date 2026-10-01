@@ -43,24 +43,38 @@ Necesitas **Java 25** (JDK). Elige una opción:
 | `/ruleta recargar` | Vuelve a leer `config/ruleta.json` |
 | `/ruleta admin agregar <nombre>` / `quitar <nombre>` / `lista` | Maneja quién puede usar la ruleta |
 
-## 4. Retos incluidos
+## 4. Rueda de colores y retos
 
-| id | Reto | Tipo | Tiempo |
-|---|---|---|---|
-| `pisar_color` | Párate sobre un bloque de un color al azar | Cumplir | 60 s |
-| `mirar_color` | Apunta con la mira a un bloque de un color al azar | Cumplir | 45 s |
-| `tener_item` | Ten un ítem al azar en el inventario | Cumplir | 90 s |
-| `agua` | Métete al agua | Cumplir | 45 s |
-| `subir` | Sube 15 bloques más alto de donde estabas | Cumplir | 60 s |
-| `mirar_cielo` | Mira directo hacia arriba | Cumplir | 15 s |
-| `no_agacharse` | Si te agachas, mueres | Evitar | 30 s |
-| `quieto` | Si te mueves, mueres | Evitar | 15 s |
-| `no_saltar` | Si saltas, mueres | Evitar | 30 s |
+La rueda tiene 8 colores. Cada color es una dificultad, y al caer en él sale un reto al azar de esa lista:
 
-- **Cumplir:** tienes que hacerlo antes de que acabe el tiempo. Cuando lo logras, quedas a salvo.
-- **Evitar:** si lo haces, mueres en ese instante.
+| Color | Dificultad |
+|---|---|
+| Verde, Cian | FÁCIL ★ |
+| Amarillo, Azul | MEDIO ★★ |
+| Naranja, Morado | DIFÍCIL ★★★ |
+| Rojo, Rosado | EXTREMO ★★★★ |
 
-Los colores cuentan para lana, concreto, terracota, vidrio, alfombras, etc. (cualquier bloque cuyo nombre empiece por el color).
+- **FÁCIL:** mirar_cielo, mirar_suelo, agacharse, agua, item_facil, quieto (10 s)
+- **MEDIO:** pisar_color, mirar_color, subir (15 bloques), no_agacharse, no_saltar, item_medio
+- **DIFÍCIL:** matar_mob, bajar (20 bloques), item_dificil, no_saltar_largo (60 s), quieto_largo (30 s)
+- **EXTREMO:** bajo_cero (Y<0), altura (Y≥150), matar_3, item_extremo (diamante, oro...), nether, no_saltar_extremo (2 min)
+
+`/ruleta lista` muestra todo con sus tiempos. `/ruleta girar <id>` fuerza un reto.
+
+### Paquete de texturas (para ver la rueda)
+
+La rueda es una imagen que viene en `ruleta-pack.zip`. En el `server.properties` del servidor:
+
+```
+resource-pack=https://raw.githubusercontent.com/andres3080/ruleta-mod/main/ruleta-pack.zip
+resource-pack-sha1=<sha1 del zip>
+require-resource-pack=true
+```
+
+Al entrar, Minecraft pide aceptar el paquete y se descarga solo. Si cambias las imágenes
+(`python generar_rueda.py`), vuelve a crear el zip y actualiza el sha1.
+La rueda aparece creciendo y girando, y al final se encoge y desaparece antes de mostrar el reto.
+Sin el paquete, pon `"ruedaVisual": false` en el config y la ruleta se muestra en texto.
 
 ## 5. Configuración (`config/ruleta.json`)
 

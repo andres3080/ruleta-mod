@@ -39,7 +39,7 @@ public final class RuletaCommand {
                 .then(Commands.literal("girar")
                         .executes(ctx -> girar(ctx, null))
                         .then(Commands.argument("reto", StringArgumentType.word())
-                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(RetoTipo.idsPorDefecto(), b))
+                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(Retos.ids(), b))
                                 .executes(ctx -> girar(ctx, StringArgumentType.getString(ctx, "reto")))))
                 .then(Commands.literal("cancelar").executes(RuletaCommand::cancelar))
                 .then(Commands.literal("lista").executes(RuletaCommand::lista))
@@ -62,9 +62,9 @@ public final class RuletaCommand {
 
     private static int girar(CommandContext<CommandSourceStack> ctx, String retoId) {
         CommandSourceStack src = ctx.getSource();
-        RetoTipo forzado = null;
+        Retos.Plantilla forzado = null;
         if (retoId != null) {
-            forzado = RetoTipo.porId(retoId);
+            forzado = Retos.porId(retoId);
             if (forzado == null) {
                 src.sendFailure(Component.literal("No existe el reto '" + retoId + "'. Usa /ruleta lista"));
                 return 0;
@@ -92,13 +92,18 @@ public final class RuletaCommand {
 
     private static int lista(CommandContext<CommandSourceStack> ctx) {
         RuletaConfig cfg = RuletaMod.config;
-        ctx.getSource().sendSuccess(() -> Component.literal("Retos disponibles:").withStyle(ChatFormatting.GOLD), false);
-        for (RetoTipo t : RetoTipo.values()) {
-            boolean activo = cfg.retosActivos.contains(t.id);
-            Component linea = Component.literal(activo ? " ✔ " : " ✘ ").withStyle(activo ? ChatFormatting.GREEN : ChatFormatting.RED)
-                    .append(Component.literal(t.id).withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal(" — " + t.nombreCorto + " (" + cfg.duracion(t) + "s)").withStyle(ChatFormatting.GRAY));
-            ctx.getSource().sendSuccess(() -> linea, false);
+        ctx.getSource().sendSuccess(() -> Component.literal("Retos por dificultad:").withStyle(ChatFormatting.GOLD), false);
+        for (Dificultad dif : Dificultad.values()) {
+            Component cab = Component.literal(dif.nombre + " " + dif.estrellasTexto()).withStyle(dif.color, ChatFormatting.BOLD);
+            ctx.getSource().sendSuccess(() -> cab, false);
+            for (Retos.Plantilla t : Retos.TODAS) {
+                if (t.dificultad() != dif) continue;
+                boolean activo = cfg.retosActivos.contains(t.id());
+                Component linea = Component.literal(activo ? "  ✔ " : "  ✘ ").withStyle(activo ? ChatFormatting.GREEN : ChatFormatting.RED)
+                        .append(Component.literal(t.id()).withStyle(ChatFormatting.WHITE))
+                        .append(Component.literal(" — " + t.nombreCorto() + " (" + cfg.duracion(t) + "s)").withStyle(ChatFormatting.GRAY));
+                ctx.getSource().sendSuccess(() -> linea, false);
+            }
         }
         return 1;
     }

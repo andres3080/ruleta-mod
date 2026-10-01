@@ -40,14 +40,20 @@ public class RuletaConfig {
     /** Distancia máxima (en bloques) para el reto de mirar un bloque. */
     public int distanciaMirar = 24;
 
+    /** Versión del archivo (no tocar). */
+    public int configVersion = 0;
+
+    /** true = muestra la rueda de colores (requiere el paquete de texturas). false = ruleta de texto. */
+    public boolean ruedaVisual = true;
+
     /** Retos que pueden salir en la ruleta. Borra los que no quieras. */
-    public List<String> retosActivos = new ArrayList<>(RetoTipo.idsPorDefecto());
+    public List<String> retosActivos = new ArrayList<>(Retos.ids());
 
     /** Colores que pueden salir en los retos de color. */
     public List<String> colores = new ArrayList<>(Colores.idsPorDefecto());
 
     /** Duración en segundos de cada reto. */
-    public Map<String, Integer> duraciones = new LinkedHashMap<>(RetoTipo.duracionesPorDefecto());
+    public Map<String, Integer> duraciones = new LinkedHashMap<>(Retos.duracionesPorDefecto());
 
     public boolean esAdmin(String nombre) {
         for (String a : admins) {
@@ -56,9 +62,9 @@ public class RuletaConfig {
         return false;
     }
 
-    public int duracion(RetoTipo tipo) {
-        Integer d = duraciones.get(tipo.id);
-        return d != null && d > 0 ? d : tipo.duracionPorDefecto;
+    public int duracion(Retos.Plantilla p) {
+        Integer d = duraciones.get(p.id());
+        return d != null && d > 0 ? d : p.duracionPorDefecto();
     }
 
     public static RuletaConfig cargar() {
@@ -73,10 +79,16 @@ public class RuletaConfig {
         }
         if (cfg == null) cfg = new RuletaConfig();
         if (cfg.admins == null) cfg.admins = new ArrayList<>();
-        if (cfg.retosActivos == null || cfg.retosActivos.isEmpty()) cfg.retosActivos = new ArrayList<>(RetoTipo.idsPorDefecto());
+        if (cfg.configVersion < 2) {
+            // Versión nueva con dificultades: se reinician las listas de retos y duraciones
+            cfg.retosActivos = new ArrayList<>(Retos.ids());
+            cfg.duraciones = new LinkedHashMap<>(Retos.duracionesPorDefecto());
+            cfg.configVersion = 2;
+        }
+        if (cfg.retosActivos == null || cfg.retosActivos.isEmpty()) cfg.retosActivos = new ArrayList<>(Retos.ids());
         if (cfg.colores == null || cfg.colores.isEmpty()) cfg.colores = new ArrayList<>(Colores.idsPorDefecto());
         if (cfg.duraciones == null) cfg.duraciones = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> e : RetoTipo.duracionesPorDefecto().entrySet()) {
+        for (Map.Entry<String, Integer> e : Retos.duracionesPorDefecto().entrySet()) {
             cfg.duraciones.putIfAbsent(e.getKey(), e.getValue());
         }
         if (cfg.castigo == null) cfg.castigo = "muerte";

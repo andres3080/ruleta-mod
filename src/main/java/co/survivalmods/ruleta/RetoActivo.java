@@ -17,21 +17,24 @@ public final class RetoActivo {
         boolean test(ServerPlayer jugador, RetoActivo reto);
     }
 
-    public final RetoTipo tipo;
+    // Índices del arreglo de datos iniciales
+    public static final int X = 0, Y = 1, Z = 2, SALTOS = 3, KILLS = 4;
+
+    public final Retos.Plantilla plantilla;
     /** Texto grande en pantalla, ej. "PISA ROJO". */
     public final Component titulo;
     /** Explicación, ej. "Párate sobre un bloque ROJO". */
     public final Component descripcion;
-    /** true = reto de "NO hagas X" (pierdes al hacerlo). false = reto de "haz X antes de que acabe el tiempo". */
+    /** true = reto de "NO hagas X". false = "haz X antes de que acabe el tiempo". */
     public final boolean evitar;
     public final int duracionSeg;
     private final Condicion condicion;
 
-    /** Datos de cada jugador al empezar el reto: x, y, z, saltos. */
     private final Map<UUID, double[]> inicio = new HashMap<>();
 
-    public RetoActivo(RetoTipo tipo, Component titulo, Component descripcion, boolean evitar, int duracionSeg, Condicion condicion) {
-        this.tipo = tipo;
+    public RetoActivo(Retos.Plantilla plantilla, Component titulo, Component descripcion, boolean evitar,
+                      int duracionSeg, Condicion condicion) {
+        this.plantilla = plantilla;
         this.titulo = titulo;
         this.descripcion = descripcion;
         this.evitar = evitar;
@@ -40,7 +43,7 @@ public final class RetoActivo {
     }
 
     public void registrarInicio(ServerPlayer p) {
-        inicio.put(p.getUUID(), new double[]{p.getX(), p.getY(), p.getZ(), saltos(p)});
+        inicio.put(p.getUUID(), new double[]{p.getX(), p.getY(), p.getZ(), saltos(p), kills(p)});
     }
 
     public double[] inicio(ServerPlayer p) {
@@ -53,5 +56,9 @@ public final class RetoActivo {
 
     public static int saltos(ServerPlayer p) {
         return p.getStats().getValue(Stats.CUSTOM.get(Stats.JUMP));
+    }
+
+    public static int kills(ServerPlayer p) {
+        return p.getStats().getValue(Stats.CUSTOM.get(Stats.MOB_KILLS));
     }
 }

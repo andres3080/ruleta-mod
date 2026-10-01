@@ -30,6 +30,6 @@ public class RuletaMod implements ModInitializer {
         if (config.admins.isEmpty()) {
             LOGGER.warn("[Ruleta] No hay admins configurados. Desde la consola usa: ruleta admin agregar <TuNombre>");
         }
-        LOGGER.info("[Ruleta] Mod de la ruleta cargado ({} retos).", RetoTipo.values().length);
+        LOGGER.info("[Ruleta] Mod de la ruleta cargado ({} retos).", Retos.TODAS.size());
     }
 }
