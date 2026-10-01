@@ -43,21 +43,25 @@ public final class Retos {
     }
 
     // ------------------------------------------------------------------ ítems por dificultad
+    // {Item, nombre, cantidad}
     private static final Object[][] ITEMS_FACIL = {
-            {Items.CRAFTING_TABLE, "Mesa de crafteo"}, {Items.TORCH, "Antorcha"},
-            {Items.COBBLESTONE, "Roca"}, {Items.STICK, "Palo"},
+            {Items.CRAFTING_TABLE, "Mesa de crafteo", 1}, {Items.TORCH, "Antorcha", 1},
+            {Items.COBBLESTONE, "Roca", 8}, {Items.STICK, "Palo", 4},
     };
     private static final Object[][] ITEMS_MEDIO = {
-            {Items.BREAD, "Pan"}, {Items.COAL, "Carbón"}, {Items.FURNACE, "Horno"},
-            {Items.ARROW, "Flecha"}, {Items.STONE_PICKAXE, "Pico de piedra"}, {Items.APPLE, "Manzana"},
+            {Items.BREAD, "Pan", 1}, {Items.COAL, "Carbón", 3}, {Items.FURNACE, "Horno", 1},
+            {Items.ARROW, "Flecha", 1}, {Items.STONE_PICKAXE, "Pico de piedra", 1}, {Items.APPLE, "Manzana", 1},
     };
     private static final Object[][] ITEMS_DIFICIL = {
-            {Items.IRON_INGOT, "Lingote de hierro"}, {Items.WATER_BUCKET, "Cubo de agua"},
-            {Items.BUCKET, "Cubo"}, {Items.IRON_PICKAXE, "Pico de hierro"}, {Items.SHIELD, "Escudo"},
+            {Items.IRON_INGOT, "Lingote de hierro", 5}, {Items.WATER_BUCKET, "Cubo de agua", 1},
+            {Items.IRON_PICKAXE, "Pico de hierro", 1}, {Items.SHIELD, "Escudo", 1},
+            {Items.IRON_CHESTPLATE, "Peto de hierro", 1}, {Items.GOLD_INGOT, "Lingote de oro", 3},
     };
     private static final Object[][] ITEMS_EXTREMO = {
-            {Items.DIAMOND, "Diamante"}, {Items.GOLD_INGOT, "Lingote de oro"},
-            {Items.OBSIDIAN, "Obsidiana"}, {Items.ENDER_PEARL, "Perla de ender"},
+            {Items.DIAMOND, "Diamante", 3}, {Items.EMERALD, "Esmeralda", 1},
+            {Items.OBSIDIAN, "Obsidiana", 4}, {Items.ENDER_PEARL, "Perla de ender", 2},
+            {Items.GOLDEN_APPLE, "Manzana dorada", 1}, {Items.CAKE, "Pastel", 1},
+            {Items.DIAMOND_PICKAXE, "Pico de diamante", 1}, {Items.IRON_INGOT, "Lingote de hierro", 24},
     };
 
     static {
@@ -164,7 +168,7 @@ public final class Retos {
                 grande("MATA 3 MOBS", DARK_RED), texto("Mata ").append(res("3 mobs", DARK_RED)),
                 (j, r) -> killsNuevos(j, r) >= 3));
 
-        add("item_extremo", "CONSIGUE UN ÍTEM", Dificultad.EXTREMO, 180, (p, rnd, cfg, d) -> retoItem(p, rnd, d, ITEMS_EXTREMO));
+        add("item_extremo", "CONSIGUE UN ÍTEM", Dificultad.EXTREMO, 240, (p, rnd, cfg, d) -> retoItem(p, rnd, d, ITEMS_EXTREMO));
 
         add("nether", "AL NETHER", Dificultad.EXTREMO, 180, (p, rnd, cfg, d) -> cumplir(p, d,
                 grande("¡AL NETHER!", DARK_RED), texto("Entra al ").append(res("Nether", DARK_RED)),
@@ -219,14 +223,17 @@ public final class Retos {
         Object[] elegido = lista[rnd.nextInt(lista.length)];
         Item item = (Item) elegido[0];
         String nombre = (String) elegido[1];
-        return cumplir(p, d, grande("CONSIGUE: " + nombre.toUpperCase(), GOLD),
-                texto("Ten ").append(res(nombre, GOLD)).append(texto(" en tu inventario")),
+        int cantidad = (Integer) elegido[2];
+        String texto = cantidad > 1 ? cantidad + " x " + nombre : nombre;
+        return cumplir(p, d, grande("CONSIGUE: " + texto.toUpperCase(), GOLD),
+                texto("Ten ").append(res(texto, GOLD)).append(texto(" en tu inventario")),
                 (j, r) -> {
                     Inventory inv = j.getInventory();
+                    int total = 0;
                     for (int i = 0; i < inv.getContainerSize(); i++) {
-                        if (inv.getItem(i).is(item)) return true;
+                        if (inv.getItem(i).is(item)) total += inv.getItem(i).getCount();
                     }
-                    return false;
+                    return total >= cantidad;
                 });
     }
 
