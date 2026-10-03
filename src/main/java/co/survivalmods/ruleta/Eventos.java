@@ -32,12 +32,17 @@ public final class Eventos {
 
     private static final Random RND = new Random();
     private static final String TAG = "ruleta_ev";
-    private static final double ALTURA_NOVA = 80;
+    private static final double ALTURA_NOVA = 100;
 
     /** Imágenes del paquete de texturas (ver generar_cielo.py). */
     private static final String[] NOVA_ESTRELLA = glifos(0xE200, 8);
     private static final String[] NOVA_EXPLOSION = glifos(0xE210, 6);
     private static final String[] NOVA_NEBULOSA = glifos(0xE218, 4);
+    private static final String[] NOVA_COLAPSO = glifos(0xE208, 2);
+    /** Capas de color que cubren toda la pantalla (el cielo se ilumina). */
+    private static final String[] CIELO_ROJO = glifos(0xE230, 4);
+    private static final String CIELO_BLANCO = String.valueOf((char) 0xE234);
+    private static final String[] CIELO_MORADO = glifos(0xE235, 2);
     private static final String[] GAS_CAPA = glifos(0xE220, 2);
 
     private static String[] glifos(int desde, int cuantos) {
@@ -231,94 +236,116 @@ public final class Eventos {
                 (s, r, js, t) -> limpiarMobs(s)));
 
         // ------------------------------------------------------------ SUPERNOVA
+        // La supernova ES LA LUNA: el paquete de texturas reemplaza 3 fases de la luna
+        //   fase 3 = gigante roja, fase 4 = explosión, fase 5 = nebulosa.
+        // El evento cambia la fecha del mundo para mostrar cada fase y congela el tiempo.
+        // Fuera del evento, el mod se salta esas 3 fases para que nunca salgan en una noche normal.
         Retos.add("supernova", "SUPERNOVA", Dificultad.EVENTO, 75, (p, rnd, cfg, d) -> evento(p, d,
                 "¡SUPERNOVA!", AQUA,
                 Retos.texto("Una estrella va a explotar: ").append(Retos.res("pon bloques encima de ti", AQUA))
                         .append(Retos.texto(" para protegerte de la radiación")),
                 (s, r, js, t) -> {
-                    cmd(s, "time set midnight");
-                    // una estrella enorme en el cielo sobre cada jugador
-                    for (ServerPlayer j : js) {
-                        invocarPantalla(s, "nova_" + n(j), j.getX(), j.getY() + ALTURA_NOVA, j.getZ(), NOVA_ESTRELLA[0], 25,
-                                "center", "[0f,0f,0f,1f]", "[0f,0f,0f]", 15, 4.0);
-                    }
+                    supernovaActiva = true;
+                    cmd(s, "gamerule minecraft:advance_time false");
+                    cmd(s, "weather clear");
+                    cmd(s, "time set " + horaLuna(FASE_ROJA));
                 },
                 (s, r, js, t) -> {
                     final int aviso = 300;                            // 15 s para cubrirse
-                    // la imagen del cielo sigue a cada jugador
-                    if (t % 10 == 0) {
-                        for (ServerPlayer j : js) {
-                            cmd(s, String.format(Locale.ROOT, "tp @e[tag=nova_%s] %.2f %.2f %.2f", n(j), j.getX(), j.getY() + ALTURA_NOVA, j.getZ()));
-                        }
-                    }
                     if (t < aviso) {
-                        // la estrella crece, parpadea y se vuelve inestable
                         double f = t / (double) aviso;
-                        int idx = Math.min(7, (int) (f * 8));
-                        if (t % 4 == 0) {
-                            int frame = (t % 8 < 4) ? idx : Math.max(0, idx - 1);
-                            for (ServerPlayer j : js) glifoPantalla(s, "nova_" + n(j), NOVA_ESTRELLA[frame]);
-                        }
+                        // el cielo se pone cada vez más rojo
                         if (t % 20 == 0) {
-                            for (ServerPlayer j : js) escalaPantalla(s, "nova_" + n(j), 25 + 45 * f, 20);
-                        }
-                        int seg = (aviso - t) / 20;
-                        if (t % 20 == 0 && seg <= 5 && seg >= 1) {
+                            String tinte = CIELO_ROJO[Math.min(3, (int) (f * 4))];
+                            int seg = (aviso - t) / 20;
+                            Component sub = seg <= 5
+                                    ? Component.literal(seg + "  ¡Cúbrete!").withStyle(RED, BOLD)
+                                    : Component.literal("Mira la luna... la estrella se está volviendo inestable").withStyle(GOLD);
                             for (ServerPlayer j : js) {
-                                titulo(j, Component.literal(String.valueOf(seg)).withStyle(RED, BOLD),
-                                        Component.literal("¡Cúbrete!").withStyle(WHITE), 0, 22, 0);
-                                cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:block.note_block.bass master @s ~ ~ ~ 1 0.5");
+                                titulo(j, pantalla(tinte), sub, t == 0 ? 20 : 0, 30, 10);
+                                if (seg <= 5) cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:block.note_block.bass master @s ~ ~ ~ 1 0.5");
+                            }
+                            if (t % 60 == 0) {
+                                for (ServerPlayer j : js)
+                                    cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:block.beacon.ambient master @s ~ ~ ~ 1 0.5");
                             }
                         }
-                    } else if (t < aviso + 30) {
-                        // ¡EXPLOSIÓN!: destello cegador y onda expansiva
-                        int k = t - aviso;
+                    } else if (t == aviso) {
+                        // ¡EXPLOSIÓN!: la luna se vuelve un estallido blanco y la pantalla se pone blanca
+                        cmd(s, "time set " + horaLuna(FASE_EXPLOSION));
                         for (ServerPlayer j : js) {
-                            String tag = "nova_" + n(j);
-                            if (k == 0) {
-                                glifoPantalla(s, tag, NOVA_EXPLOSION[0]);
-                                escalaPantalla(s, tag, 190, 3);
-                                String c = String.format(Locale.ROOT, "%.2f %.2f %.2f", j.getX(), j.getY() + ALTURA_NOVA, j.getZ());
-                                cmd(s, "particle minecraft:explosion_emitter " + c + " 10 10 10 0 30 force " + n(j));
-                                cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.generic.explode master @s ~ ~ ~ 1 0.4");
-                                cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.wither.spawn master @s ~ ~ ~ 0.8 0.6");
-                                cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.lightning_bolt.thunder master @s ~ ~ ~ 1 0.5");
-                                cmd(s, "effect give " + n(j) + " minecraft:nausea 6 0 true");
-                                titulo(j, Component.literal("☢ ¡SUPERNOVA!").withStyle(AQUA, BOLD),
-                                        Component.literal("¡Radiación! Ponte bajo bloques").withStyle(WHITE), 0, 50, 15);
-                            } else if (k % 4 == 0 && k / 4 <= 5) {
-                                glifoPantalla(s, tag, NOVA_EXPLOSION[k / 4]);
-                                escalaPantalla(s, tag, 170 + 15 * (k / 4), 4);
-                            }
+                            titulo(j, pantalla(CIELO_BLANCO), Component.literal("☢ ¡SUPERNOVA! Ponte bajo bloques").withStyle(AQUA, BOLD), 0, 10, 40);
+                            cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.generic.explode master @s ~ ~ ~ 1 0.4");
+                            cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.lightning_bolt.thunder master @s ~ ~ ~ 1 0.5");
+                            cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:entity.wither.death master @s ~ ~ ~ 0.7 0.5");
+                            cmd(s, "effect give " + n(j) + " minecraft:nausea 5 0 true");
                         }
-                    } else {
-                        // queda una nebulosa de colores; la radiación daña a quien vea el cielo
-                        int k = t - aviso - 30;
-                        if (k == 0) {
-                            for (ServerPlayer j : js) {
-                                glifoPantalla(s, "nova_" + n(j), NOVA_NEBULOSA[0]);
-                                escalaPantalla(s, "nova_" + n(j), 150, 15);
-                            }
-                        } else if (k % 30 == 0) {
-                            for (ServerPlayer j : js) glifoPantalla(s, "nova_" + n(j), NOVA_NEBULOSA[(k / 30) % 4]);
-                        }
+                    } else if (t == aviso + 60) {
+                        // queda la nebulosa en el lugar de la luna
+                        cmd(s, "time set " + horaLuna(FASE_NEBULOSA));
                     }
+                    if (t > aviso + 40 && (t - aviso) % 20 == 0) {
+                        int k = (t - aviso) / 40;
+                        for (ServerPlayer j : js)
+                            titulo(j, pantalla(CIELO_MORADO[k % 2]), Component.empty(), 0, 30, 10);
+                    }
+                    // radiación: daña a quien NO tenga bloques encima
                     if (t >= aviso && t % 20 == 0) {
                         for (ServerPlayer j : js) {
-                            BlockPos ojos = BlockPos.containing(j.getX(), j.getEyeY(), j.getZ());
-                            if (j.level().canSeeSky(ojos)) {
-                                cmd(s, "damage " + n(j) + " 4 minecraft:magic");
-                                cmd(s, String.format(Locale.ROOT, "particle minecraft:glow %.2f %.2f %.2f 0.4 0.8 0.4 0 15 force @a",
-                                        j.getX(), j.getY() + 1, j.getZ()));
-                                actionbar(j, Component.literal("☢ ¡Estás expuesto a la radiación!").withStyle(AQUA, BOLD));
+                            if (expuestoAlCielo(j)) {
+                                cmd(s, "damage " + n(j) + " 3 minecraft:magic");
+                                actionbar(j, Component.literal("☢ ¡Estás expuesto a la radiación! Pon bloques encima").withStyle(AQUA, BOLD));
+                            } else {
+                                actionbar(j, Component.literal("✔ Protegido de la radiación").withStyle(GREEN));
                             }
                         }
                     }
                 },
                 (s, r, js, t) -> {
                     limpiarMobs(s);
-                    cmd(s, "time set day");
+                    cmd(s, "time set " + (24000L * 6 + 1000));       // de día, y la próxima luna será la fase 6
+                    cmd(s, "gamerule minecraft:advance_time true");
+                    for (ServerPlayer j : js) cmd(s, "title " + n(j) + " clear");
+                    supernovaActiva = false;
                 }));
+    }
+
+    // ------------------------------------------------------------------ luna / supernova
+
+    static final int FASE_ROJA = 3, FASE_EXPLOSION = 4, FASE_NEBULOSA = 5;
+    static boolean supernovaActiva = false;
+
+    /** Hora del mundo en la que es medianoche y la luna está en la fase indicada (luna arriba, un poco inclinada). */
+    private static long horaLuna(int fase) {
+        return 24000L * fase + 17000;
+    }
+
+    /** Se llama cada tick: si el mundo entra en una de las fases de la supernova sin evento, salta a la fase 6. */
+    static void saltarFasesSupernova(MinecraftServer s) {
+        if (supernovaActiva || s.getTickCount() % 100 != 0) return;
+        long dia = s.overworld().getDayTime() / 24000L;
+        int fase = (int) (dia % 8);
+        if (fase >= FASE_ROJA && fase <= FASE_NEBULOSA) {
+            cmd(s, "time add " + (24000L * (6 - fase)));
+        }
+    }
+
+    /** Texto que se muestra como "título" para cubrir la pantalla con un color. */
+    private static Component pantalla(String glifo) {
+        // sin sombra, para que el color no se oscurezca
+        return Component.literal(glifo).withStyle(st -> st.withColor(WHITE).withShadowColor(0));
+    }
+
+    /** true si no hay ningún bloque sólido entre la cabeza del jugador y el cielo (revisa 60 bloques). */
+    static boolean expuestoAlCielo(ServerPlayer j) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int x = (int) Math.floor(j.getX()), z = (int) Math.floor(j.getZ());
+        int y0 = (int) Math.floor(j.getEyeY()) + 1;
+        for (int y = y0; y < y0 + 60; y++) {
+            pos.set(x, y, z);
+            if (!j.level().getBlockState(pos).isAir()) return false;
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------ utilidades

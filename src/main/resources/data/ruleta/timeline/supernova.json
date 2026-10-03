@@ -1,0 +1,216 @@
+{
+  "clock": "minecraft:overworld",
+  "period_ticks": 192000,
+  "tracks": {
+    "minecraft:visual/sky_color": {
+      "ease": "linear",
+      "modifier": "alpha_blend",
+      "keyframes": [
+        {
+          "ticks": 0,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 88000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 89000,
+          "value": "#99B02010"
+        },
+        {
+          "ticks": 89300,
+          "value": "#E0FF3010"
+        },
+        {
+          "ticks": 91000,
+          "value": "#E0FF3010"
+        },
+        {
+          "ticks": 92000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 112000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 113000,
+          "value": "#F8FFFFFF"
+        },
+        {
+          "ticks": 113060,
+          "value": "#C0FF9040"
+        },
+        {
+          "ticks": 114000,
+          "value": "#C0FF9040"
+        },
+        {
+          "ticks": 115000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 136000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 137000,
+          "value": "#B05A2AB0"
+        },
+        {
+          "ticks": 139000,
+          "value": "#B05A2AB0"
+        },
+        {
+          "ticks": 140000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 192000,
+          "value": "#00000000"
+        }
+      ]
+    },
+    "minecraft:visual/fog_color": {
+      "ease": "linear",
+      "modifier": "alpha_blend",
+      "keyframes": [
+        {
+          "ticks": 0,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 88000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 89000,
+          "value": "#90A01808"
+        },
+        {
+          "ticks": 89300,
+          "value": "#D8E02808"
+        },
+        {
+          "ticks": 91000,
+          "value": "#D8E02808"
+        },
+        {
+          "ticks": 92000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 112000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 113000,
+          "value": "#F8FFFFFF"
+        },
+        {
+          "ticks": 113060,
+          "value": "#C0FF8030"
+        },
+        {
+          "ticks": 114000,
+          "value": "#C0FF8030"
+        },
+        {
+          "ticks": 115000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 136000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 137000,
+          "value": "#A04020A0"
+        },
+        {
+          "ticks": 139000,
+          "value": "#A04020A0"
+        },
+        {
+          "ticks": 140000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 192000,
+          "value": "#00000000"
+        }
+      ]
+    },
+    "minecraft:visual/sky_light_color": {
+      "ease": "linear",
+      "modifier": "alpha_blend",
+      "keyframes": [
+        {
+          "ticks": 0,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 88000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 89000,
+          "value": "#80FF3020"
+        },
+        {
+          "ticks": 89300,
+          "value": "#C0FF4020"
+        },
+        {
+          "ticks": 91000,
+          "value": "#C0FF4020"
+        },
+        {
+          "ticks": 92000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 112000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 113000,
+          "value": "#F0FFFFFF"
+        },
+        {
+          "ticks": 113060,
+          "value": "#A0FFA060"
+        },
+        {
+          "ticks": 114000,
+          "value": "#A0FFA060"
+        },
+        {
+          "ticks": 115000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 136000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 137000,
+          "value": "#9C8060FF"
+        },
+        {
+          "ticks": 139000,
+          "value": "#9C8060FF"
+        },
+        {
+          "ticks": 140000,
+          "value": "#00000000"
+        },
+        {
+          "ticks": 192000,
+          "value": "#00000000"
+        }
+      ]
+    }
+  }
+}

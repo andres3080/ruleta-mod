@@ -22,6 +22,7 @@ public class RuletaMod implements ModInitializer {
                 RuletaCommand.registrar(dispatcher));
 
         ServerTickEvents.END_SERVER_TICK.register(ruleta::tick);
+        ServerTickEvents.END_SERVER_TICK.register(Eventos::saltarFasesSupernova);
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             if (ruleta.activa()) ruleta.cancelar(server);

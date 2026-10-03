@@ -169,6 +169,19 @@ for i in range(8):
 os.makedirs(f"{PACK}/assets/minecraft/particles", exist_ok=True)
 json.dump({"textures": [f"ruleta:gas_{i}" for i in range(8)]}, open(f"{PACK}/assets/minecraft/particles/sculk_soul.json", "w"), indent=2)
 
+# ---- La luna: 3 fases se reemplazan por la supernova (el juego dibuja la luna sumando luz, el negro es invisible)
+LUNA = f"{PACK}/assets/minecraft/textures/environment/celestial/moon"
+os.makedirs(LUNA, exist_ok=True)
+def a_luna(img, nombre):
+    arr = np.asarray(img.convert("RGBA")).astype(float)
+    rgb = arr[..., :3] * (arr[..., 3:4] / 255)          # premultiplicado sobre negro
+    Image.fromarray(np.dstack([rgb, np.full(rgb.shape[:2], 255)]).astype(np.uint8), "RGBA").save(f"{LUNA}/{nombre}.png")
+gigante = estrella(7).resize((330, 330), Image.LANCZOS)
+lienzo = Image.new("RGBA", (256, 256), (0, 0, 0, 0)); lienzo.alpha_composite(gigante.crop((37, 37, 293, 293)), (0, 0))
+a_luna(lienzo.resize((256, 256)), "waning_crescent")          # fase 3: gigante roja
+a_luna(explosion(3), "new_moon")                                # fase 4: explosión
+a_luna(nebulosa(0), "waxing_crescent")                          # fase 5: nebulosa
+
 prev = Image.new("RGBA", (256 * 6, 256 * 3), (6, 8, 20, 255))
 for j, n in enumerate(["nova_estrella_0", "nova_estrella_4", "nova_estrella_7", "nova_colapso_1", "nova_explosion_0", "nova_explosion_2"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 0))
@@ -176,5 +189,7 @@ for j, n in enumerate(["nova_explosion_3", "nova_explosion_5", "nova_nebulosa_0"
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 256))
 for j, n in enumerate(["cielo_rojo_0", "cielo_rojo_3", "cielo_morado_0"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png").resize((512, 256)), (512 * j, 512))
+for j, n in enumerate(["waning_crescent", "new_moon", "waxing_crescent"]):
+    prev.alpha_composite(Image.open(f"{LUNA}/{n}.png").convert("RGBA"), (256 * (j + 3), 256 * 2))
 prev.save("preview_eventos.png")
 print("ok", len(prov))
