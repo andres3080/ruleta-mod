@@ -44,6 +44,8 @@ public final class Eventos {
     private static final String CIELO_BLANCO = String.valueOf((char) 0xE234);
     private static final String[] CIELO_MORADO = glifos(0xE235, 2);
     private static final String ONDA = String.valueOf((char) 0xE240);
+    static final String ONDA_GLIFO = ONDA;
+    static final String CIELO_BLANCO_GLIFO = String.valueOf((char) 0xE234);
     private static final String[] GAS_CAPA = glifos(0xE220, 2);
 
     private static String[] glifos(int desde, int cuantos) {
@@ -324,6 +326,22 @@ public final class Eventos {
                 }));
     }
 
+    // ------------------------------------------------------------------ ayudas para otros archivos de eventos
+
+    static RetoActivo eventoPublico(Retos.Plantilla p, int d, String titulo, ChatFormatting color, Component desc,
+                                    RetoActivo.Hook ini, RetoActivo.Hook tick, RetoActivo.Hook fin) {
+        return evento(p, d, titulo, color, desc, ini, tick, fin);
+    }
+
+    static void avisarTodos(List<ServerPlayer> js, Component c) {
+        avisar(js, c);
+    }
+
+    /** Capa de pantalla completa teñida de un color (0xRRGGBB). */
+    static Component pantallaColor(String glifo, int rgb) {
+        return Component.literal(glifo).withStyle(st -> st.withColor(rgb).withShadowColor(0));
+    }
+
     // ------------------------------------------------------------------ luna / supernova
 
     static final int FASE_ROJA = 3, FASE_EXPLOSION = 4, FASE_NEBULOSA = 5;
@@ -360,6 +378,7 @@ public final class Eventos {
         if (fase >= FASE_ROJA && fase <= FASE_NEBULOSA) {
             cmd(s, "time add " + (24000L * (6 - fase)));
         }
+        Meteoritos.registrar();
     }
 
     /** Texto que se muestra como "título" para cubrir la pantalla con un color. */
