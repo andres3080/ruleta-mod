@@ -38,7 +38,7 @@ public final class Retos {
 
     public static final List<Plantilla> TODAS = new ArrayList<>();
 
-    private static void add(String id, String nombre, Dificultad dif, int seg, Creador c) {
+    static void add(String id, String nombre, Dificultad dif, int seg, Creador c) {
         TODAS.add(new Plantilla(id, nombre, dif, seg, c));
     }
 
@@ -177,6 +177,10 @@ public final class Retos {
         add("no_saltar_extremo", "NO SALTES", Dificultad.EXTREMO, 120, (p, rnd, cfg, d) -> evitar(p, d,
                 grande("NO SALTES (2 min)", RED), texto("Dos minutos sin ").append(res("saltar", RED)),
                 Retos::salto));
+    }
+
+    static {
+        Eventos.registrar();
     }
 
     private Retos() {}

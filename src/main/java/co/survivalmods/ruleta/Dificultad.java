@@ -6,7 +6,8 @@ public enum Dificultad {
     FACIL("FÁCIL", ChatFormatting.GREEN, 1),
     MEDIO("MEDIO", ChatFormatting.YELLOW, 2),
     DIFICIL("DIFÍCIL", ChatFormatting.GOLD, 3),
-    EXTREMO("EXTREMO", ChatFormatting.RED, 4);
+    EXTREMO("EXTREMO", ChatFormatting.RED, 4),
+    EVENTO("EVENTO", ChatFormatting.DARK_RED, 0);
 
     public final String nombre;
     public final ChatFormatting color;
@@ -19,6 +20,7 @@ public enum Dificultad {
     }
 
     public String estrellasTexto() {
+        if (this == EVENTO) return "☠";
         return "★".repeat(estrellas) + "☆".repeat(4 - estrellas);
     }
 }

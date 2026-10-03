@@ -73,7 +73,8 @@ require-resource-pack=true
 
 Al entrar, Minecraft pide aceptar el paquete y se descarga solo. Si cambias las imágenes
 (`python generar_rueda.py`), vuelve a crear el zip y actualiza el sha1.
-La rueda aparece creciendo y girando, y al final se encoge y desaparece antes de mostrar el reto.
+La rueda aparece creciendo y girando, frena poco a poco con un "tic" en cada clavo, y al final se encoge antes de mostrar el reto.
+Los sonidos (tick, inicio, redoble, ganador) son originales y se generan con `python generar_sonidos.py`.
 Sin el paquete, pon `"ruedaVisual": false` en el config y la ruleta se muestra en texto.
 
 ## 5. Configuración (`config/ruleta.json`)

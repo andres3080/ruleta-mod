@@ -73,6 +73,7 @@ public final class Ruleta {
         if (forzado != null) {
             List<Sector> opciones = new ArrayList<>();
             for (Sector s : Sector.values()) if (s.dificultad == forzado.dificultad()) opciones.add(s);
+            if (opciones.isEmpty()) opciones.add(Sector.values()[rnd.nextInt(Sector.values().length)]);
             sector = opciones.get(rnd.nextInt(opciones.size()));
         } else {
             sector = Sector.values()[rnd.nextInt(Sector.values().length)];
@@ -104,13 +105,14 @@ public final class Ruleta {
             enviarTiempos(p, 0, 30, 0);
             if (!RuletaMod.config.ruedaVisual) sonido(p, SoundEvents.NOTE_BLOCK_BELL, 0.8F, 0.6F);
         }
-        sonidoRuleta(server, "inicio", 1.0F, 1.0F);
+        sonidoRuleta(server, "aparece", 1.0F, 1.0F);
         broadcast(server, Component.literal("¡La ruleta está girando!").withStyle(ChatFormatting.YELLOW));
         return true;
     }
 
     public void cancelar(MinecraftServer server) {
         if (fase == Fase.INACTIVA) return;
+        if (fase == Fase.RETO) ejecutarHook(server, reto.alTerminar, 0);
         limpiar();
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             p.connection.send(new ClientboundSetActionBarTextPacket(Component.empty()));
@@ -166,7 +168,7 @@ public final class Ruleta {
         }
     }
 
-    /** La rueda aparece: crece girando (un fotograma cada 2 ticks). */
+    /** La rueda aparece: destello blanco que crece y luego se llenan los colores (un fotograma cada 2 ticks). */
     private void tickEntrada(MinecraftServer server) {
         if (ticksEspera > 0) {
             ticksEspera--;
@@ -174,20 +176,19 @@ public final class Ruleta {
         }
         if (pasoAnim < Sector.FOTOGRAMAS_ENTRADA) {
             Component titulo = Component.literal(Sector.glifoEntrada(pasoAnim)).withStyle(ChatFormatting.WHITE);
-            float tono = 0.6F + pasoAnim * 0.25F;
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 enviarTitulo(p, titulo, Component.empty());
-                sonido(p, SoundEvents.NOTE_BLOCK_CHIME, 0.6F, tono);
             }
             pasoAnim++;
             ticksEspera = 1;
         } else {
             fase = Fase.GIRANDO;
             ticksEspera = 2; // pequeña pausa antes de girar
+            sonidoRuleta(server, "inicio", 1.0F, 1.0F);
         }
     }
 
-    /** La rueda desaparece: se encoge girando, y luego aparece el reto. */
+    /** La rueda (llena del color ganador) se encoge, destello blanco, desaparece, y luego aparece el reto. */
     private void tickSalida(MinecraftServer server) {
         if (ticksEspera > 0) {
             ticksEspera--;
@@ -196,11 +197,10 @@ public final class Ruleta {
         if (pasoAnim < Sector.FOTOGRAMAS_SALIDA) {
             Component titulo = Component.literal(sector.glifoSalida(pasoAnim)).withStyle(ChatFormatting.WHITE);
             boolean ultimo = pasoAnim == Sector.FOTOGRAMAS_SALIDA - 1;
-            float tono = 1.6F - pasoAnim * 0.2F;
+            if (pasoAnim == 0) sonidoRuleta(server, "desaparece", 1.0F, 1.0F);
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 if (ultimo) enviarTiempos(p, 0, 2, 4); // el último fotograma se desvanece
                 enviarTitulo(p, titulo, Component.empty());
-                sonido(p, SoundEvents.NOTE_BLOCK_CHIME, 0.5F, tono);
             }
             pasoAnim++;
             ticksEspera = 1;
@@ -222,13 +222,17 @@ public final class Ruleta {
         tGiro++;
         double x = Math.min(1.0, tGiro / (double) TICKS_GIRO);
         double frenado = 1 - Math.pow(1 - x, 2.5);            // rápido al inicio, frena suave al final
+        double anterior = anguloActual;
         anguloActual = anguloInicio + anguloTotal * frenado;
+        boolean rapido = anguloActual - anterior > 14;   // gira tan rápido que se ve borrosa
         int nuevo = Math.floorMod((int) Math.round(anguloActual / Sector.GRADOS_POR_FOTOGRAMA), Sector.FOTOGRAMAS);
         boolean cambio = nuevo != fotograma || tGiro == 1;
         fotograma = nuevo;
 
         if (cambio) {
-            Component titulo = tituloRueda(fotograma);
+            Component titulo = (rapido && RuletaMod.config.ruedaVisual)
+                    ? Component.literal(Sector.glifoBorroso(fotograma)).withStyle(ChatFormatting.WHITE)
+                    : tituloRueda(fotograma);
             Component sub = Component.literal("★ Girando la ruleta ★").withStyle(ChatFormatting.GOLD);
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 enviarTitulo(p, titulo, sub);
@@ -282,7 +286,9 @@ public final class Ruleta {
         ticksColor++;
         if (ticksColor % 4 == 0 && ticksColor < TICKS_MOSTRAR_COLOR) {
             int variante = (ticksColor / 4) % 2;   // los bombillos parpadean
-            Component titulo = tituloResaltado(variante);
+            Component titulo = (ticksColor >= 16 && RuletaMod.config.ruedaVisual)
+                    ? Component.literal(sector.glifoLleno(variante)).withStyle(ChatFormatting.WHITE)   // se llena del color
+                    : tituloResaltado(variante);
             Component sub = subtituloSector();
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 enviarTitulo(p, titulo, sub);
@@ -350,7 +356,9 @@ public final class Ruleta {
         broadcastSinPrefijo(server, Component.literal("  ").append(reto.descripcion.copy()));
         broadcastSinPrefijo(server, Component.literal("  Tiempo: ").withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(reto.duracionSeg + " segundos").withStyle(ChatFormatting.WHITE)));
-        if (reto.evitar) {
+        if (reto.sobrevivir) {
+            broadcastSinPrefijo(server, Component.literal("  ☠ EVENTO: sigue vivo hasta que acabe el tiempo. Si mueres, quedas eliminado.").withStyle(ChatFormatting.RED));
+        } else if (reto.evitar) {
             broadcastSinPrefijo(server, Component.literal("  Aguanta sin hacerlo hasta que acabe el tiempo.").withStyle(ChatFormatting.GRAY));
         } else {
             broadcastSinPrefijo(server, Component.literal("  Cúmplelo antes de que acabe el tiempo.").withStyle(ChatFormatting.GRAY));
@@ -360,12 +368,49 @@ public final class Ruleta {
         if (participantes.isEmpty()) {
             broadcast(server, Component.literal("No hay jugadores participando (¿todos en creativo?).").withStyle(ChatFormatting.GRAY));
             limpiar();
+            return;
+        }
+        ejecutarHook(server, reto.alIniciar, 0);
+    }
+
+    /** Jugadores del reto que siguen en juego (conectados, vivos y no eliminados). */
+    private List<ServerPlayer> jugadoresEnJuego(MinecraftServer server) {
+        List<ServerPlayer> lista = new ArrayList<>();
+        for (UUID id : participantes) {
+            if (eliminados.contains(id)) continue;
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p != null && p.isAlive()) lista.add(p);
+        }
+        return lista;
+    }
+
+    private void ejecutarHook(MinecraftServer server, RetoActivo.Hook hook, int tick) {
+        if (hook == null || reto == null) return;
+        try {
+            hook.run(server, reto, jugadoresEnJuego(server), tick);
+        } catch (Exception e) {
+            RuletaMod.LOGGER.error("[Ruleta] Error en el evento " + reto.plantilla.id(), e);
         }
     }
 
     private void tickReto(MinecraftServer server) {
         RuletaConfig cfg = RuletaMod.config;
         ticksRestantes--;
+
+        if (reto.sobrevivir) {
+            // quien muere durante el evento queda eliminado
+            for (UUID id : participantes) {
+                if (eliminados.contains(id)) continue;
+                ServerPlayer p = server.getPlayerList().getPlayer(id);
+                if (p != null && !p.isAlive()) {
+                    eliminados.add(id);
+                    broadcast(server, Component.literal("☠ ").withStyle(ChatFormatting.DARK_RED)
+                            .append(Component.literal(p.getName().getString()).withStyle(ChatFormatting.WHITE))
+                            .append(Component.literal(" no sobrevivió al evento").withStyle(ChatFormatting.RED)));
+                }
+            }
+            ejecutarHook(server, reto.alTick, reto.duracionSeg * 20 - ticksRestantes - 1);
+        }
 
         for (UUID id : new ArrayList<>(participantes)) {
             if (cumplieron.contains(id) || eliminados.contains(id)) continue;
@@ -422,6 +467,7 @@ public final class Ruleta {
     }
 
     private void terminar(MinecraftServer server, RuletaConfig cfg) {
+        ejecutarHook(server, reto.alTerminar, reto.duracionSeg * 20);
         List<String> sobrevivientes = new ArrayList<>();
         for (UUID id : participantes) {
             if (eliminados.contains(id)) continue;

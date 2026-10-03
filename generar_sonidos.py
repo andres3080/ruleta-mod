@@ -62,4 +62,30 @@ for k, ini in enumerate(np.arange(0, 0.85, 0.045)):
     g = bp(rng.standard_normal(len(tl)), 150, 2500) * np.exp(-tl * 70) * (0.5 + 0.5 * ini / 0.85)
     x[n0:n0 + len(g)] += g
 guardar("redoble", x)
+# --- aparece: "pop" + brillo que sube ---
+def brillo(dur, f0, f1, n, vol=0.5):
+    x = np.zeros(int(SR * dur))
+    for k in range(n):
+        ini = k * dur / n
+        f = f0 + (f1 - f0) * k / max(1, n - 1)
+        tl = t(0.12)
+        g = np.sin(2 * np.pi * f * tl) * np.exp(-tl * 30) * vol
+        a = int(ini * SR); x[a:a + len(g)] += g[:len(x) - a]
+    return x
+tt = t(0.8)
+pop = np.sin(2 * np.pi * (180 + 600 * np.exp(-tt * 25)) * tt) * np.exp(-tt * 14)
+x = pop * 0.8
+b = brillo(0.6, 1500, 4200, 14, 0.35); x[:len(b)] += b
+x += bp(rng.standard_normal(len(tt)), 3000, 9000) * np.exp(-tt * 6) * 0.12
+guardar("aparece", x)
+
+# --- desaparece: brillo que baja + "fiuu" ---
+tt = t(0.8)
+x = brillo(0.8, 3800, 900, 12, 0.35)
+ruido = rng.standard_normal(len(tt)); sw = np.zeros(len(tt))
+for i, f in enumerate(np.linspace(4000, 400, 20)):
+    seg = slice(i * len(tt) // 20, (i + 1) * len(tt) // 20)
+    sw[seg] = bp(ruido, f * 0.7, min(f * 1.4, 20000))[seg]
+x[:len(sw)] += sw * np.sin(np.pi * np.clip(tt / 0.8, 0, 1)) * 0.5
+guardar("desaparece", x)
 print("sonidos ok")

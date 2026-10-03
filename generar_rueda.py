@@ -20,9 +20,10 @@ PASO = 360 / FRAMES
 
 # (color, nivel de dificultad) en orden horario desde arriba
 SECTORES = [
-    ((235, 45, 45), 4), ((245, 135, 25), 3), ((250, 210, 30), 2), ((55, 190, 60), 1),
-    ((25, 195, 215), 1), ((45, 90, 225), 2), ((145, 60, 215), 3), ((235, 75, 175), 4),
+    ((235, 45, 45), 0), ((245, 135, 25), 3), ((250, 210, 30), 2), ((55, 190, 60), 1),
+    ((25, 195, 215), 1), ((45, 90, 225), 2), ((145, 60, 215), 3), ((235, 75, 175), 0),
 ]
+# nivel 0 = EVENTO (se dibuja una calavera en vez de estrellas)
 
 yy, xx = np.mgrid[0:W, 0:W]
 dx, dy = xx - C + 0.5, yy - C + 0.5
@@ -30,10 +31,12 @@ RAD = np.hypot(dx, dy)
 ANG = (np.degrees(np.arctan2(dx, -dy)) + 360) % 360      # 0° arriba, sentido horario
 
 
-def disco(resaltar=None):
-    """Disco de colores sin rotar (sector 0 centrado arriba)."""
+def disco(resaltar=None, lleno=None):
+    """Disco de colores sin rotar (sector 0 centrado arriba). lleno=s pinta todo del color del sector s."""
     idx = (((ANG + 22.5) % 360) // 45).astype(int)
     base = np.array([c for c, _ in SECTORES], dtype=float)[idx]
+    if lleno is not None:
+        base[:] = np.array(SECTORES[lleno][0], dtype=float)
     dentro = ((ANG + 22.5) % 45) / 45.0                        # 0..1 dentro del sector
     lateral = 1 - np.abs(dentro - 0.5) * 2                     # 1 en el centro del sector
     r = np.clip(RAD / R, 0, 1)
@@ -62,6 +65,11 @@ def disco(resaltar=None):
     for i, (_, nivel) in enumerate(SECTORES):
         a0 = i * 45
         apagado = resaltar is not None and resaltar != i
+        if lleno is not None:
+            nivel = -1                      # rueda llena: sin íconos, solo destellos
+        if nivel == 0:
+            x, y = polar(a0, R * 0.62)
+            calavera(d, x, y, 15 * S, a0, apagado)
         for n in range(nivel):
             x, y = polar(a0, R * (0.78 - n * 0.15))
             estrella(d, x, y, 7.5 * S, (255, 255, 255, 110 if apagado else 245), a0)
@@ -88,6 +96,24 @@ def estrella(d, cx, cy, r, fill, rot=0):
         rr = r if j % 2 == 0 else r * 0.45
         pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
     d.polygon(pts, fill=fill)
+
+
+def calavera(d, cx, cy, r, ang, apagado):
+    """Calavera blanca orientada hacia afuera de la rueda (icono de EVENTO)."""
+    t = math.radians(ang)
+    def p(lx, ly):
+        return (cx + lx * math.cos(t) - ly * math.sin(t), cy + lx * math.sin(t) + ly * math.cos(t))
+    def circulo(ox, oy, rr, n=28):
+        return [p(ox + rr * math.cos(2 * math.pi * k / n), oy + rr * math.sin(2 * math.pi * k / n)) for k in range(n)]
+    blanco = (255, 255, 255, 120 if apagado else 250)
+    oscuro = (40, 10, 10, 160 if apagado else 255)
+    d.polygon(circulo(0, -0.2 * r, r), fill=blanco)
+    d.polygon([p(-0.55 * r, 0.4 * r), p(0.55 * r, 0.4 * r), p(0.55 * r, 1.0 * r), p(-0.55 * r, 1.0 * r)], fill=blanco)
+    d.polygon(circulo(-0.4 * r, -0.1 * r, 0.27 * r, 16), fill=oscuro)
+    d.polygon(circulo(0.4 * r, -0.1 * r, 0.27 * r, 16), fill=oscuro)
+    d.polygon([p(0, 0.2 * r), p(-0.13 * r, 0.45 * r), p(0.13 * r, 0.45 * r)], fill=oscuro)
+    for k in (-0.27, 0.0, 0.27):
+        d.line([p(k * r, 0.62 * r), p(k * r, 1.0 * r)], fill=oscuro, width=max(1, int(0.09 * r)))
 
 
 def destello(d, cx, cy, r, fill):
@@ -231,26 +257,61 @@ for s in range(8):
     rot = fotograma_final(s) * PASO
     glifo(f"rueda_sel_{s}", componer(DISCOS_SEL[s], rot, fase=0, desv=0), 0xE040 + s)
     glifo(f"rueda_sel_{s}_b", componer(DISCOS_SEL[s], rot, fase=1, desv=0), 0xE048 + s)
-# Entrada: U+E050..E054 (crece girando y termina en el fotograma 0)
-ENTRADA = [0.15, 0.4, 0.65, 0.88, 1.04]
-for j, f in enumerate(ENTRADA):
-    rot = -(len(ENTRADA) - j) * 18
-    glifo(f"rueda_in_{j}", escalado(componer(DISCO, rot, desv=0), f), 0xE050 + j)
-# Salida: U+E060 + s*8 + j (el color ganador se encoge girando)
-SALIDA = [1.04, 0.85, 0.6, 0.35, 0.12]
+def blanquear(img, a):
+    """Mezcla la imagen con blanco (a=0 nada, a=1 silueta blanca)."""
+    arr = np.asarray(img).astype(float)
+    arr[..., :3] = arr[..., :3] * (1 - a) + 255 * a
+    return Image.fromarray(arr.astype(np.uint8), "RGBA")
+
+
+def componer_borroso(rot, fase):
+    """Fotograma con desenfoque de movimiento para cuando la rueda gira rápido."""
+    muestras = [DISCO.rotate(-(rot + o), resample=Image.BICUBIC, center=(C, C)) for o in np.linspace(-12, 12, 7)]
+    prom = np.mean([np.asarray(m).astype(float) for m in muestras], axis=0)
+    img = AROS[fase].copy()
+    img.alpha_composite(Image.fromarray(prom.astype(np.uint8), "RGBA"))
+    img.alpha_composite(CENTRO)
+    img.alpha_composite(puntero(0))
+    return img.resize((256, 256), Image.LANCZOS)
+
+
+# Giro rápido con desenfoque: U+E100..E12F
+for k in range(FRAMES):
+    glifo(f"rueda_blur_{k:02d}", componer_borroso(k * PASO, (k // 3) % 2), 0xE100 + k)
+
+# Rueda llena del color ganador: U+E140+s (y bombillos alternos U+E148+s)
+DISCOS_LLENOS = [disco(lleno=s) for s in range(8)]
 for s in range(8):
-    base = fotograma_final(s) * PASO
-    for j, f in enumerate(SALIDA):
-        glifo(f"rueda_out_{s}_{j}", escalado(componer(DISCOS_SEL[s], base + j * 18, desv=0), f), 0xE060 + s * 8 + j)
+    rot = fotograma_final(s) * PASO
+    glifo(f"rueda_full_{s}", componer(DISCOS_LLENOS[s], rot, fase=0, desv=0), 0xE140 + s)
+    glifo(f"rueda_full_{s}_b", componer(DISCOS_LLENOS[s], rot, fase=1, desv=0), 0xE148 + s)
+
+# Entrada: destello blanco que crece y luego aparecen los colores (U+E050..E055)
+BASE0 = componer(DISCO, 0, desv=0)
+ENTRADA = [(0.2, 1.0), (0.55, 1.0), (1.06, 1.0), (1.0, 0.7), (1.0, 0.35), (1.0, 0.1)]
+for j, (f, w) in enumerate(ENTRADA):
+    glifo(f"rueda_in_{j}", escalado(blanquear(BASE0, w), f), 0xE050 + j)
+
+# Salida: la rueda llena del color se encoge (U+E060+s*8+j) ...
+SALIDA = [(1.0, 0.0), (0.7, 0.1), (0.38, 0.3)]
+for s in range(8):
+    llena = componer(DISCOS_LLENOS[s], fotograma_final(s) * PASO, desv=0)
+    for j, (f, w) in enumerate(SALIDA):
+        glifo(f"rueda_out_{s}_{j}", escalado(blanquear(llena, w), f), 0xE060 + s * 8 + j)
+# ... y termina con un destello blanco que desaparece (U+E160..E162)
+for j, f in enumerate([0.9, 0.5, 0.12]):
+    glifo(f"rueda_flash_{j}", escalado(blanquear(BASE0, 1.0), f), 0xE160 + j)
 
 fuente = f"{PACK}/assets/minecraft/font"
 os.makedirs(fuente, exist_ok=True)
 json.dump({"providers": prov}, open(f"{fuente}/default.json", "w"), indent=2)
 
-prev = Image.new("RGBA", (256 * 4, 256 * 2), (60, 70, 60, 255))
-for j, k in enumerate([0, 2, 4, 5]):
-    prev.alpha_composite(Image.open(f"{OUT}/rueda_{k:02d}.png"), (256 * j, 0))
-for j, s in enumerate([0, 2, 3, 6]):
-    prev.alpha_composite(Image.open(f"{OUT}/rueda_sel_{s}.png"), (256 * j, 256))
+prev = Image.new("RGBA", (256 * 6, 256 * 3), (0, 200, 0, 255))
+for j in range(6):
+    prev.alpha_composite(Image.open(f"{OUT}/rueda_in_{j}.png"), (256 * j, 0))
+for j, n in enumerate(["rueda_blur_00", "rueda_blur_05", "rueda_sel_0", "rueda_full_0", "rueda_full_3", "rueda_full_6_b"]):
+    prev.alpha_composite(Image.open(f"{OUT}/{n}.png"), (256 * j, 256))
+for j, n in enumerate(["rueda_out_0_0", "rueda_out_0_1", "rueda_out_0_2", "rueda_flash_0", "rueda_flash_1", "rueda_flash_2"]):
+    prev.alpha_composite(Image.open(f"{OUT}/{n}.png"), (256 * j, 512))
 prev.save("preview.png")
 print("ok", len(prov), "glifos")

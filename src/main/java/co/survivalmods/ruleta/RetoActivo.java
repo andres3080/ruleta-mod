@@ -1,10 +1,12 @@
 package co.survivalmods.ruleta;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,6 +18,18 @@ public final class RetoActivo {
     public interface Condicion {
         boolean test(ServerPlayer jugador, RetoActivo reto);
     }
+
+    /** Código que corre al empezar, en cada tick y al terminar un evento de supervivencia. */
+    @FunctionalInterface
+    public interface Hook {
+        void run(MinecraftServer server, RetoActivo reto, List<ServerPlayer> jugadores, int tick);
+    }
+
+    /** true = evento de supervivencia: gana quien siga vivo al final (morir durante el evento elimina). */
+    public boolean sobrevivir = false;
+    public Hook alIniciar, alTick, alTerminar;
+    /** Datos libres que cada evento puede guardar mientras dura. */
+    public final Map<String, Object> datos = new HashMap<>();
 
     // Índices del arreglo de datos iniciales
     public static final int X = 0, Y = 1, Z = 2, SALTOS = 3, KILLS = 4;
