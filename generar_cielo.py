@@ -151,6 +151,16 @@ for i in range(2): glifo(f"nova_colapso_{i}", colapso(i), 0xE208 + i)
 for i in range(6): glifo(f"nova_explosion_{i}", explosion(i), 0xE210 + i)
 for i in range(4): glifo(f"nova_nebulosa_{i}", nebulosa(i), 0xE218 + i)
 for i in range(2): glifo(f"gas_capa_{i}", capa_gas(i), 0xE220 + i)
+# Onda expansiva de la supernova: anillo blanco suave (se ve desde abajo, cubre el cielo al crecer)
+def onda():
+    r = RAD / (N / 2)
+    anillo = np.exp(-((r - 0.82) / 0.07) ** 2) + np.exp(-((r - 0.6) / 0.25) ** 2) * 0.35
+    anillo *= 0.8 + 0.2 * fbm(500)
+    a = np.clip(anillo, 0, 1) * np.clip((1 - r) / 0.06, 0, 1)
+    a = np.where(a < 0.11, 0, a)
+    return a_img(np.dstack([np.full((N, N), 255.0), np.full((N, N), 250.0), np.full((N, N), 240.0)]), a)
+glifo("nova_onda", onda(), 0xE240)
+
 # Capas de color para toda la pantalla (se muestran como título): rojo creciente, destello blanco, morado
 for j, f in enumerate([0.14, 0.22, 0.30, 0.38]):
     glifo(f"cielo_rojo_{j}", tinte((255, 60, 20), f), 0xE230 + j, 320, 157)

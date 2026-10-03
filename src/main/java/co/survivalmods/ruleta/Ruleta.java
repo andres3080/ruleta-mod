@@ -127,6 +127,7 @@ public final class Ruleta {
     }
 
     private void limpiar() {
+        Eventos.ESTADO.clear();
         fase = Fase.INACTIVA;
         reto = null;
         sector = null;
@@ -451,8 +452,14 @@ public final class Ruleta {
                     barra = Component.literal("✔ A salvo — quedan " + seg + "s").withStyle(ChatFormatting.GREEN);
                 } else {
                     ChatFormatting colorTiempo = seg <= 5 ? ChatFormatting.RED : ChatFormatting.YELLOW;
-                    barra = Component.literal("⌛ " + seg + "s  ").withStyle(colorTiempo, ChatFormatting.BOLD)
-                            .append(reto.descripcion.copy());
+                    barra = Component.literal("⌛ " + seg + "s  ").withStyle(colorTiempo, ChatFormatting.BOLD);
+                    if (reto.sobrevivir) {
+                        // eventos: tiempo + estado del jugador (expuesto, protegido, en el gas...) en una sola línea corta
+                        Component estado = Eventos.ESTADO.get(id);
+                        barra.append(estado != null ? estado.copy() : reto.titulo.copy());
+                    } else {
+                        barra.append(reto.descripcion.copy());
+                    }
                 }
                 p.connection.send(new ClientboundSetActionBarTextPacket(barra));
                 if (seg <= 5 && participantes.contains(id) && !cumplieron.contains(id) && !eliminados.contains(id)) {

@@ -43,6 +43,7 @@ public final class Eventos {
     private static final String[] CIELO_ROJO = glifos(0xE230, 4);
     private static final String CIELO_BLANCO = String.valueOf((char) 0xE234);
     private static final String[] CIELO_MORADO = glifos(0xE235, 2);
+    private static final String ONDA = String.valueOf((char) 0xE240);
     private static final String[] GAS_CAPA = glifos(0xE220, 2);
 
     private static String[] glifos(int desde, int cuantos) {
@@ -268,7 +269,28 @@ public final class Eventos {
                                     cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:block.beacon.ambient master @s ~ ~ ~ 1 0.5");
                             }
                         }
+                    } else if (t == aviso + 1) {
+                        // la onda blanca empieza a expandirse por todo el cielo
+                        for (ServerPlayer j : js) {
+                            ondaEscala(s, "ondaA_" + n(j), "[-0.7071f,0f,0f,0.7071f]", 900, 45);
+                            ondaEscala(s, "ondaB_" + n(j), "[0.7071f,0f,0f,0.7071f]", 900, 45);
+                        }
+                    } else if (t > aviso + 15 && t <= aviso + 45 && t % 3 == 0) {
+                        // y se desvanece
+                        int op = (int) Math.round(255 * (1 - (t - aviso - 15) / 30.0));
+                        for (ServerPlayer j : js) {
+                            cmd(s, "data merge entity @e[tag=ondaA_" + n(j) + ",limit=1] {text_opacity:" + (byte) Math.max(26, op) + "b}");
+                            cmd(s, "data merge entity @e[tag=ondaB_" + n(j) + ",limit=1] {text_opacity:" + (byte) Math.max(26, op) + "b}");
+                        }
+                        if (t >= aviso + 45) cmd(s, "kill @e[tag=" + TAG + ",type=minecraft:text_display]");
                     } else if (t == aviso) {
+                        // onda expansiva: un anillo blanco enorme sobre cada jugador, que mira hacia abajo
+                        for (ServerPlayer j : js) {
+                            invocarPantalla(s, "ondaA_" + n(j), j.getX(), j.getY() + 70, j.getZ(), ONDA, 15, "fixed",
+                                    "[-0.7071f,0f,0f,0.7071f]", "[0f,0f,0f]", 15, 16.0);
+                            invocarPantalla(s, "ondaB_" + n(j), j.getX(), j.getY() + 70, j.getZ(), ONDA, 15, "fixed",
+                                    "[0.7071f,0f,0f,0.7071f]", "[0f,0f,0f]", 15, 16.0);
+                        }
                         // ¡EXPLOSIÓN!: la luna se vuelve un estallido blanco y la pantalla se pone blanca
                         cmd(s, "time set " + horaLuna(FASE_EXPLOSION));
                         for (ServerPlayer j : js) {
@@ -287,7 +309,7 @@ public final class Eventos {
                         for (ServerPlayer j : js) {
                             if (expuestoAlCielo(j)) {
                                 cmd(s, "damage " + n(j) + " 3 minecraft:magic");
-                                actionbar(j, Component.literal("☢ ¡Estás expuesto a la radiación! Pon bloques encima").withStyle(AQUA, BOLD));
+                                actionbar(j, Component.literal("☢ ¡EXPUESTO a la radiación! Pon bloques encima").withStyle(AQUA, BOLD));
                             } else {
                                 actionbar(j, Component.literal("✔ Protegido de la radiación").withStyle(GREEN));
                             }
@@ -426,13 +448,28 @@ public final class Eventos {
                 tag, ticks, escala, escala, escala));
     }
 
+    /** Agranda la onda de forma suave conservando su rotación. */
+    static void ondaEscala(MinecraftServer s, String tag, String rot, double escala, int ticks) {
+        cmd(s, String.format(Locale.ROOT,
+                "data merge entity @e[tag=%s,limit=1] {start_interpolation:0,interpolation_duration:%d,"
+                        + "transformation:{left_rotation:%s,right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[%.1ff,%.1ff,%.1ff]}}",
+                tag, ticks, rot, escala, escala, escala));
+    }
+
     static void flecha(MinecraftServer s, double x, double y, double z) {
         cmd(s, String.format(Locale.ROOT, "summon minecraft:arrow %.2f %.2f %.2f {Motion:[0.0d,-2.0d,0.0d],pickup:0b,Tags:[\"%s\"]}",
                 x, y, z, TAG));
     }
 
+    /**
+     * Estado del evento para cada jugador ("☢ expuesto", "✔ protegido"...).
+     * No se envía directo: la ruleta lo junta con la cuenta regresiva en UNA sola línea cada segundo,
+     * así los textos no se pisan ni parpadean.
+     */
+    static final Map<UUID, Component> ESTADO = new HashMap<>();
+
     static void actionbar(ServerPlayer j, Component c) {
-        j.connection.send(new ClientboundSetActionBarTextPacket(c));
+        ESTADO.put(j.getUUID(), c);
     }
 
     static void avisar(List<ServerPlayer> js, Component c) {
