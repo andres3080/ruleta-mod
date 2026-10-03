@@ -238,15 +238,14 @@ public final class Eventos {
         // ------------------------------------------------------------ SUPERNOVA
         // La supernova ES LA LUNA: el paquete de texturas reemplaza 3 fases de la luna
         //   fase 3 = gigante roja, fase 4 = explosión, fase 5 = nebulosa.
-        // El evento cambia la fecha del mundo para mostrar cada fase y congela el tiempo.
+        // El evento cambia la fecha del mundo para mostrar cada fase; el timeline del mod pinta el cielo en esas fechas.
         // Fuera del evento, el mod se salta esas 3 fases para que nunca salgan en una noche normal.
         Retos.add("supernova", "SUPERNOVA", Dificultad.EVENTO, 75, (p, rnd, cfg, d) -> evento(p, d,
                 "¡SUPERNOVA!", AQUA,
                 Retos.texto("Una estrella va a explotar: ").append(Retos.res("pon bloques encima de ti", AQUA))
                         .append(Retos.texto(" para protegerte de la radiación")),
                 (s, r, js, t) -> {
-                    supernovaActiva = true;
-                    cmd(s, "gamerule minecraft:advance_time false");
+                    supernovaActiva = true;   // el cielo cambia de color con data/ruleta/timeline/supernova.json
                     cmd(s, "weather clear");
                     cmd(s, "time set " + horaLuna(FASE_ROJA));
                 },
@@ -256,13 +255,12 @@ public final class Eventos {
                         double f = t / (double) aviso;
                         // el cielo se pone cada vez más rojo
                         if (t % 20 == 0) {
-                            String tinte = CIELO_ROJO[Math.min(3, (int) (f * 4))];
                             int seg = (aviso - t) / 20;
                             Component sub = seg <= 5
                                     ? Component.literal(seg + "  ¡Cúbrete!").withStyle(RED, BOLD)
                                     : Component.literal("Mira la luna... la estrella se está volviendo inestable").withStyle(GOLD);
                             for (ServerPlayer j : js) {
-                                titulo(j, pantalla(tinte), sub, t == 0 ? 20 : 0, 30, 10);
+                                titulo(j, Component.empty(), sub, 0, 30, 10);
                                 if (seg <= 5) cmd(s, "execute as " + n(j) + " at @s run playsound minecraft:block.note_block.bass master @s ~ ~ ~ 1 0.5");
                             }
                             if (t % 60 == 0) {
@@ -284,11 +282,6 @@ public final class Eventos {
                         // queda la nebulosa en el lugar de la luna
                         cmd(s, "time set " + horaLuna(FASE_NEBULOSA));
                     }
-                    if (t > aviso + 40 && (t - aviso) % 20 == 0) {
-                        int k = (t - aviso) / 40;
-                        for (ServerPlayer j : js)
-                            titulo(j, pantalla(CIELO_MORADO[k % 2]), Component.empty(), 0, 30, 10);
-                    }
                     // radiación: daña a quien NO tenga bloques encima
                     if (t >= aviso && t % 20 == 0) {
                         for (ServerPlayer j : js) {
@@ -304,7 +297,6 @@ public final class Eventos {
                 (s, r, js, t) -> {
                     limpiarMobs(s);
                     cmd(s, "time set " + (24000L * 6 + 1000));       // de día, y la próxima luna será la fase 6
-                    cmd(s, "gamerule minecraft:advance_time true");
                     for (ServerPlayer j : js) cmd(s, "title " + n(j) + " clear");
                     supernovaActiva = false;
                 }));
@@ -320,11 +312,29 @@ public final class Eventos {
         return 24000L * fase + 17000;
     }
 
+    /**
+     * Lee el tiempo del mundo usando el comando /time (así no dependemos de nombres internos de Minecraft).
+     * "ruleta:supernova" es nuestro timeline de 8 días, así que devuelve directamente la posición dentro de las 8 fases.
+     */
+    private static long consultarTiempo(MinecraftServer s) {
+        String[] intentos = {"time query ruleta:supernova", "time query day"};
+        for (int i = 0; i < intentos.length; i++) {
+            try {
+                int r = s.getCommands().getDispatcher().execute(intentos[i], s.createCommandSourceStack().withSuppressedOutput());
+                return i == 0 ? r : (long) r * 24000L;
+            } catch (Exception ignored) {
+                // probar la siguiente forma
+            }
+        }
+        return -1;
+    }
+
     /** Se llama cada tick: si el mundo entra en una de las fases de la supernova sin evento, salta a la fase 6. */
     static void saltarFasesSupernova(MinecraftServer s) {
         if (supernovaActiva || s.getTickCount() % 100 != 0) return;
-        long dia = s.overworld().getDayTime() / 24000L;
-        int fase = (int) (dia % 8);
+        long ticks = consultarTiempo(s);
+        if (ticks < 0) return;
+        int fase = (int) ((ticks / 24000L) % 8);
         if (fase >= FASE_ROJA && fase <= FASE_NEBULOSA) {
             cmd(s, "time add " + (24000L * (6 - fase)));
         }
