@@ -34,57 +34,90 @@ def fbm(semilla):
     return (ruido(64, semilla) * 0.5 + ruido(32, semilla + 1) * 0.25 + ruido(16, semilla + 2) * 0.15 + ruido(8, semilla + 3) * 0.1)
 
 
+def suave(rgb, a, borde=10):
+    """Recorta en círculo y oscurece los bordes (en Minecraft lo casi transparente se corta de golpe)."""
+    a = np.clip(a, 0, 1) * np.clip((N / 2 - 2 - RAD) / borde, 0, 1)
+    rgb = rgb * np.clip(a * 2.2, 0, 1)[..., None]     # cerca del borde se funde con el cielo negro
+    return a_img(rgb, a)
+
+
 def estrella(i):
-    """Estrella inestable que crece y brilla más (i = 0..7)."""
+    """Gigante roja (i = 0..7): un 'sol' rojo que crece, burbujea y se vuelve inestable."""
     f = i / 7
-    r0 = 10 + 10 * f
-    glow = np.exp(-(RAD / (r0 * (2.2 + f * 1.5))) ** 2)
-    core = np.clip(1.2 - RAD / r0, 0, 1) ** 0.6
-    rayos = np.zeros_like(RAD)
-    for k in range(4):
-        th = k * math.pi / 2 + math.pi / 4 * (i % 2) * 0.1
-        d = np.abs(np.sin(ANG - th))
-        rayos += np.exp(-(d * RAD / 1.6) ** 2) * np.exp(-RAD / (40 + 60 * f))
-    pulso = 0.85 + 0.15 * math.sin(i * 1.7)
-    inten = np.clip(core + glow * 0.8 * pulso + rayos * (0.4 + 0.6 * f), 0, 1.5)
-    tinte = np.array([255, 230 - 40 * f, 200 - 120 * f]) if i < 5 else np.array([230, 240, 255])
-    rgb = 255 * np.clip(inten[..., None] * 0.6, 0, 1) + tinte * np.clip(inten[..., None], 0, 1) * 0.6
-    rgb = np.where(core[..., None] > 0.5, 255, rgb)
-    return a_img(rgb, np.clip(inten, 0, 1) * np.clip((N / 2 - RAD) / 10, 0, 1))
+    r0 = 42 + 22 * f                                  # radio del disco
+    rr = RAD / r0
+    disco = rr < 1
+    granos = fbm(100 + i) * 0.6 + ruido(6, 200 + i) * 0.4
+    limbo = np.sqrt(np.clip(1 - rr ** 2, 0, 1))       # más oscuro en el borde, como el sol
+    nucleo = np.array([255, 120, 70]) * (1 - f * 0.4) + np.array([240, 60, 35]) * f * 0.4
+    borde_c = np.array([150, 15, 8])
+    col = borde_c * (1 - limbo[..., None]) + nucleo * limbo[..., None]
+    col = col * (0.75 + 0.45 * granos[..., None])
+    manchas = (fbm(300 + i) > 0.74) & disco
+    col[manchas] *= 0.55
+    corona = np.exp(-np.clip(RAD - r0, 0, None) / (10 + 14 * f)) * (~disco)
+    llamas = np.clip(fbm(400 + i) - 0.45, 0, 1) * 3 * np.exp(-np.clip(RAD - r0, 0, None) / 9) * (~disco)
+    glow = np.clip(corona * 0.8 + llamas, 0, 1)
+    col_glow = np.array([230, 35, 15]) * glow[..., None] + np.array([255, 150, 60]) * (llamas[..., None] * 0.5)
+    rgb = np.where(disco[..., None], col, col_glow)
+    a = np.where(disco, 1.0, glow)
+    return suave(rgb, a, 14)
+
+
+def colapso(i):
+    """La estrella se encoge de golpe y brilla azul-blanco justo antes de explotar."""
+    r0 = 14 - 6 * i
+    inten = np.clip(1.3 - RAD / r0, 0, 1) + np.exp(-(RAD / (r0 * 3)) ** 2) * 0.8
+    rgb = np.dstack([200 + 55 * np.clip(inten, 0, 1), 220 + 35 * np.clip(inten, 0, 1), np.full_like(inten, 255)])
+    return suave(rgb, inten, 20)
 
 
 def explosion(i):
-    """0 = destello cegador; 1..5 = onda expansiva."""
+    """0 = destello; 1..5 = onda de gas caliente que se expande (blanca -> naranja -> roja)."""
     if i == 0:
-        inten = np.exp(-(RAD / 80) ** 2) * 1.3 + np.exp(-(RAD / 25) ** 2)
-        rgb = np.full((N, N, 3), 255.0)
-        return a_img(rgb, np.clip(inten, 0, 1) * np.clip((N / 2 - RAD) / 8, 0, 1))
+        inten = np.exp(-(RAD / 70) ** 2) * 1.4 + np.exp(-(RAD / 20) ** 2)
+        return suave(np.full((N, N, 3), 255.0), inten, 30)
     f = i / 5
-    radio = 25 + 95 * f
-    anillo = np.exp(-((RAD - radio) / (5 + 6 * f)) ** 2) * (1.2 - 0.7 * f)
-    anillo *= 0.75 + 0.25 * fbm(10 + i)
-    centro = np.exp(-(RAD / (30 - 15 * f)) ** 2) * (1 - 0.6 * f)
-    restos = np.clip((fbm(20 + i) - 0.5) * 4, 0, 1) * np.exp(-((RAD - radio * 0.85) / 16) ** 2) * 0.5
-    inten = np.clip(anillo + centro + restos, 0, 1.3)
-    rgb = np.dstack([180 + 75 * inten, 200 + 55 * inten, np.full_like(inten, 255)])
+    radio = 30 + 85 * f
+    fil = fbm(10 + i)
+    anillo = np.exp(-((RAD - radio) / (8 + 14 * f)) ** 2) * (0.6 + 0.6 * fil)
+    dentro = np.clip(1 - RAD / radio, 0, 1) * (0.35 + 0.5 * fil) * (1 - 0.5 * f)
+    centro = np.exp(-(RAD / (18 - 8 * f)) ** 2)
+    inten = np.clip(anillo + dentro + centro, 0, 1.2)
+    calor = np.clip(1 - f + anillo * 0.3, 0, 1)[..., None]
+    caliente, frio = np.array([255, 245, 220]), np.array([255, 110, 40])
+    rgb = (caliente * calor + frio * (1 - calor)) * np.clip(inten, 0, 1)[..., None] ** 0.4
     rgb = np.where((centro > 0.3)[..., None], 255, rgb)
-    return a_img(rgb, np.clip(inten, 0, 1) * np.clip((N / 2 - RAD) / 8, 0, 1))
+    return suave(rgb, inten, 25)
 
 
 def nebulosa(i):
-    """Nebulosa de colores que queda después (4 variantes que se alternan)."""
-    n1, n2 = fbm(40 + i), fbm(50 + i)
-    forma = np.clip(1 - RAD / 118, 0, 1) ** 0.8
-    densidad = np.clip((n1 * 1.6 - 0.45) * forma * 1.8, 0, 1)
-    anillo = np.exp(-((RAD - 70) / 22) ** 2) * (0.5 + 0.5 * n2)
-    d = np.clip(densidad + anillo * 0.7, 0, 1)
-    morado, cian, rosa = np.array([150, 60, 230]), np.array([60, 200, 255]), np.array([255, 90, 170])
-    mezcla = n2[..., None]
-    rgb = morado * (1 - mezcla) + cian * mezcla
-    rgb = rgb * (1 - anillo[..., None] * 0.6) + rosa * anillo[..., None] * 0.6
-    centro = np.exp(-(RAD / 9) ** 2)
-    rgb = rgb * (1 - centro[..., None]) + 255 * centro[..., None]
-    return a_img(rgb, np.clip(d * 0.85 + centro, 0, 1))
+    """Remanente de supernova: nube de gas morado/azul con filamentos rojos y una estrella de neutrones."""
+    n1, n2, n3 = fbm(40 + i), fbm(50 + i), fbm(60 + i)
+    forma = np.clip(1 - (RAD / 120) ** 2, 0, 1)
+    d = np.clip((0.35 + n1 * 0.9) * forma, 0, 1)
+    fil = np.clip(1 - np.abs(n3 - 0.5) * 9, 0, 1) * forma
+    morado, azul, rosa = np.array([150, 70, 230]), np.array([70, 150, 255]), np.array([255, 80, 120])
+    m = np.clip(n2 * 1.4 - 0.2, 0, 1)[..., None]
+    rgb = morado * (1 - m) + azul * m
+    rgb = rgb * (0.45 + 0.75 * d[..., None])
+    rgb = rgb * (1 - fil[..., None] * 0.7) + rosa * fil[..., None] * 0.7
+    centro = np.exp(-(RAD / 7) ** 2)
+    halo = np.exp(-(RAD / 30) ** 2) * 0.5
+    rgb = rgb * (1 - centro[..., None]) + 255 * centro[..., None] + np.array([120, 160, 255]) * halo[..., None]
+    a = np.clip(d * 0.9 + fil * 0.5 + centro + halo, 0, 1)
+    return suave(rgb, a, 40)
+
+
+def tinte(color, fuerza, nombre_ancho=512, alto=256):
+    """Capa de color para toda la pantalla (cielo iluminado): más fuerte arriba y en el centro."""
+    y, x = np.mgrid[0:alto, 0:nombre_ancho]
+    v = 1 - y / alto
+    hx = 1 - np.abs(x - nombre_ancho / 2) / (nombre_ancho / 2)
+    a = fuerza * (0.45 + 0.55 * v) * (0.75 + 0.25 * hx)
+    a = np.clip(a, 0.11 if fuerza < 0.9 else 0, 1)
+    rgb = np.ones((alto, nombre_ancho, 3)) * np.array(color, dtype=float)
+    return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
 
 
 def capa_gas(i):
@@ -109,18 +142,25 @@ def nube_particula(i):
 
 
 prov = []
-def glifo(nombre, img, code):
+def glifo(nombre, img, code, height=32, ascent=16):
     img.save(f"{FONT_DIR}/{nombre}.png", optimize=True)
-    prov.append({"type": "bitmap", "file": f"ruleta:font/{nombre}.png", "height": 32, "ascent": 16, "chars": [chr(code)]})
+    prov.append({"type": "bitmap", "file": f"ruleta:font/{nombre}.png", "height": height, "ascent": ascent, "chars": [chr(code)]})
 
 for i in range(8): glifo(f"nova_estrella_{i}", estrella(i), 0xE200 + i)
+for i in range(2): glifo(f"nova_colapso_{i}", colapso(i), 0xE208 + i)
 for i in range(6): glifo(f"nova_explosion_{i}", explosion(i), 0xE210 + i)
 for i in range(4): glifo(f"nova_nebulosa_{i}", nebulosa(i), 0xE218 + i)
 for i in range(2): glifo(f"gas_capa_{i}", capa_gas(i), 0xE220 + i)
+# Capas de color para toda la pantalla (se muestran como título): rojo creciente, destello blanco, morado
+for j, f in enumerate([0.14, 0.22, 0.30, 0.38]):
+    glifo(f"cielo_rojo_{j}", tinte((255, 60, 20), f), 0xE230 + j, 320, 157)
+glifo("cielo_blanco", tinte((255, 255, 255), 1.0), 0xE234, 320, 157)
+glifo("cielo_morado_0", tinte((140, 70, 255), 0.18), 0xE235, 320, 157)
+glifo("cielo_morado_1", tinte((90, 120, 255), 0.18), 0xE236, 320, 157)
 
 fuente = f"{PACK}/assets/minecraft/font/default.json"
 datos = json.load(open(fuente))
-datos["providers"] = [p for p in datos["providers"] if not ("nova_" in p["file"] or "gas_" in p["file"])] + prov
+datos["providers"] = [p for p in datos["providers"] if not any(k in p["file"] for k in ("nova_", "gas_", "cielo_"))] + prov
 json.dump(datos, open(fuente, "w"), indent=2)
 
 # Partícula del gas: se redefine "sculk_soul" (casi no se usa en el juego) para que sean nubes verdes
@@ -129,18 +169,12 @@ for i in range(8):
 os.makedirs(f"{PACK}/assets/minecraft/particles", exist_ok=True)
 json.dump({"textures": [f"ruleta:gas_{i}" for i in range(8)]}, open(f"{PACK}/assets/minecraft/particles/sculk_soul.json", "w"), indent=2)
 
-prev = Image.new("RGBA", (256 * 6, 256 * 3), (10, 12, 30, 255))
-for j, i in enumerate([0, 3, 7]): prev.alpha_composite(Image.open(f"{FONT_DIR}/nova_estrella_{i}.png"), (256 * j, 0))
-prev.alpha_composite(Image.open(f"{FONT_DIR}/nova_explosion_0.png"), (768, 0))
-prev.alpha_composite(Image.open(f"{FONT_DIR}/nova_explosion_2.png"), (1024, 0))
-prev.alpha_composite(Image.open(f"{FONT_DIR}/nova_explosion_5.png"), (1280, 0))
-for j in range(4): prev.alpha_composite(Image.open(f"{FONT_DIR}/nova_nebulosa_{j}.png"), (256 * j, 256))
-fondo = Image.new("RGBA", (512, 256), (90, 120, 80, 255))
-prev.alpha_composite(fondo, (0, 512))
-prev.alpha_composite(Image.open(f"{FONT_DIR}/gas_capa_0.png"), (0, 512))
-prev.alpha_composite(Image.open(f"{FONT_DIR}/gas_capa_1.png"), (256, 512))
-for j in range(4):
-    p = Image.open(f"{PART_DIR}/gas_{j*2}.png").resize((96, 96))
-    prev.alpha_composite(p, (560 + j * 110, 590))
+prev = Image.new("RGBA", (256 * 6, 256 * 3), (6, 8, 20, 255))
+for j, n in enumerate(["nova_estrella_0", "nova_estrella_4", "nova_estrella_7", "nova_colapso_1", "nova_explosion_0", "nova_explosion_2"]):
+    prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 0))
+for j, n in enumerate(["nova_explosion_3", "nova_explosion_5", "nova_nebulosa_0", "nova_nebulosa_1", "nova_nebulosa_2", "nova_nebulosa_3"]):
+    prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 256))
+for j, n in enumerate(["cielo_rojo_0", "cielo_rojo_3", "cielo_morado_0"]):
+    prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png").resize((512, 256)), (512 * j, 512))
 prev.save("preview_eventos.png")
 print("ok", len(prov))
