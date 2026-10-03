@@ -192,6 +192,54 @@ a_luna(lienzo.resize((256, 256)), "waning_crescent")          # fase 3: gigante 
 a_luna(explosion(3), "new_moon")                                # fase 4: explosión
 a_luna(nebulosa(0), "waxing_crescent")                          # fase 5: nebulosa
 
+# ---- Tormenta solar: la fase "third_quarter" de la luna es un sol gigante
+def sol():
+    r0 = 92
+    rr = RAD / r0
+    disco = rr < 1
+    gran = fbm(600) * 0.5 + ruido(6, 601) * 0.5
+    limbo = np.sqrt(np.clip(1 - rr ** 2, 0, 1))
+    col = np.array([255, 150, 20]) * (1 - limbo[..., None]) + np.array([255, 245, 170]) * limbo[..., None]
+    col = col * (0.85 + 0.3 * gran[..., None])
+    corona = np.exp(-np.clip(RAD - r0, 0, None) / 14) * (~disco)
+    llamas = np.clip(fbm(602) - 0.4, 0, 1) * 3 * np.exp(-np.clip(RAD - r0, 0, None) / 10) * (~disco)
+    g = np.clip(corona * 0.9 + llamas, 0, 1)
+    rgb = np.where(disco[..., None], col, np.array([255, 190, 40]) * g[..., None])
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.full((N, N), 255)]).astype(np.uint8), "RGBA")
+sol().save(f"{LUNA}/third_quarter.png")
+
+# ---- La grieta: rajadura brillante (4 tamaños) que se ve desde abajo en el cielo
+def grieta(f):
+    rng2 = np.random.default_rng(77)
+    img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    largo = 55 + f * 22
+    pts = []
+    for k in range(25):
+        x = N / 2 - largo + 2 * largo * k / 24
+        y = N / 2 + rng2.normal(0, 6 + f * 3)
+        pts.append((x, y))
+    ramas = []
+    for k in range(3 + f * 2):
+        a = pts[rng2.integers(3, 22)]
+        b = (a[0] + rng2.normal(0, 25), a[1] + rng2.choice([-1, 1]) * (15 + rng2.random() * 25 + f * 8))
+        ramas.append((a, b))
+    for ancho, col in [(16 + f * 6, (120, 40, 220, 90)), (9 + f * 3, (190, 90, 255, 170)), (4 + f, (245, 220, 255, 255))]:
+        d.line(pts, fill=col, width=int(ancho), joint="curve")
+        for a, b in ramas:
+            d.line([a, b], fill=col, width=max(1, int(ancho * 0.5)))
+    img = img.filter(ImageFilter.GaussianBlur(1.2))
+    halo = img.filter(ImageFilter.GaussianBlur(10))
+    out = Image.new("RGBA", (N, N), (0, 0, 0, 0)); out.alpha_composite(halo); out.alpha_composite(halo); out.alpha_composite(img)
+    arr = np.asarray(out).astype(float); arr[..., 3] = np.where(arr[..., 3] < 28, 0, arr[..., 3])
+    return Image.fromarray(arr.astype(np.uint8), "RGBA")
+for f in range(4):
+    glifo(f"grieta_{f}", grieta(f), 0xE250 + f)
+datos = json.load(open(f"{PACK}/assets/minecraft/font/default.json"))
+datos["providers"] = [p for p in datos["providers"] if "grieta_" not in p["file"]] + [p for p in prov if "grieta_" in p["file"]]
+json.dump(datos, open(f"{PACK}/assets/minecraft/font/default.json", "w"), indent=2)
+
 prev = Image.new("RGBA", (256 * 6, 256 * 3), (6, 8, 20, 255))
 for j, n in enumerate(["nova_estrella_0", "nova_estrella_4", "nova_estrella_7", "nova_colapso_1", "nova_explosion_0", "nova_explosion_2"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 0))
@@ -199,6 +247,9 @@ for j, n in enumerate(["nova_explosion_3", "nova_explosion_5", "nova_nebulosa_0"
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png"), (256 * j, 256))
 for j, n in enumerate(["cielo_rojo_0", "cielo_rojo_3", "cielo_morado_0"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png").resize((512, 256)), (512 * j, 512))
+prev.alpha_composite(Image.open(f"{LUNA}/third_quarter.png").convert("RGBA"), (0, 512))
+for k in range(2):
+    prev.alpha_composite(Image.open(f"{FONT_DIR}/grieta_{k*3}.png"), (256 * (k + 1), 512))
 for j, n in enumerate(["waning_crescent", "new_moon", "waxing_crescent"]):
     prev.alpha_composite(Image.open(f"{LUNA}/{n}.png").convert("RGBA"), (256 * (j + 3), 256 * 2))
 prev.save("preview_eventos.png")

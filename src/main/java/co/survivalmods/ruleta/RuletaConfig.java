@@ -79,11 +79,11 @@ public class RuletaConfig {
         }
         if (cfg == null) cfg = new RuletaConfig();
         if (cfg.admins == null) cfg.admins = new ArrayList<>();
-        if (cfg.configVersion < 5) {
+        if (cfg.configVersion < 6) {
             // Versión nueva con dificultades: se reinician las listas de retos y duraciones
             cfg.retosActivos = new ArrayList<>(Retos.ids());
             cfg.duraciones = new LinkedHashMap<>(Retos.duracionesPorDefecto());
-            cfg.configVersion = 5;
+            cfg.configVersion = 6;
         }
         if (cfg.retosActivos == null || cfg.retosActivos.isEmpty()) cfg.retosActivos = new ArrayList<>(Retos.ids());
         if (cfg.colores == null || cfg.colores.isEmpty()) cfg.colores = new ArrayList<>(Colores.idsPorDefecto());

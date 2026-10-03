@@ -333,6 +333,14 @@ public final class Eventos {
         return evento(p, d, titulo, color, desc, ini, tick, fin);
     }
 
+    static String[] glifosPublico(int desde, int cuantos) {
+        return glifos(desde, cuantos);
+    }
+
+    static void glifoPantallaPublico(MinecraftServer s, String tag, String glifo) {
+        glifoPantalla(s, tag, glifo);
+    }
+
     static void avisarTodos(List<ServerPlayer> js, Component c) {
         avisar(js, c);
     }
@@ -375,10 +383,11 @@ public final class Eventos {
         long ticks = consultarTiempo(s);
         if (ticks < 0) return;
         int fase = (int) ((ticks / 24000L) % 8);
-        if (fase >= FASE_ROJA && fase <= FASE_NEBULOSA) {
+        if (fase >= 2 && fase <= FASE_NEBULOSA) {          // días 2-5: tormenta solar, supernova, meteoritos, grieta
             cmd(s, "time add " + (24000L * (6 - fase)));
         }
         Meteoritos.registrar();
+        EventosCielo.registrar();
     }
 
     /** Texto que se muestra como "título" para cubrir la pantalla con un color. */
