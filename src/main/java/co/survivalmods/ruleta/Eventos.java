@@ -254,8 +254,8 @@ public final class Eventos {
                     // la estrella: un disco gigante fijo en lo alto del cielo, sobre el grupo (tapa casi todo el cielo)
                     // (a 45 bloques: más arriba la niebla de la distancia de renderizado la borra)
                     double[] c = centroCielo(js);
-                    invocarPantalla(s, "novaA", c[0], c[1], c[2], NOVA_ESTRELLA[0], 110, "fixed", NOVA_ROT_A, "[0f,0f,0f]", 15, 16.0);
-                    invocarPantalla(s, "novaB", c[0], c[1], c[2], NOVA_ESTRELLA[0], 110, "fixed", NOVA_ROT_B, "[0f,0f,0f]", 15, 16.0);
+                    invocarPantalla(s, "novaA", c[0], c[1], c[2], NOVA_SEQ[0], ESCALA_NOVA, "fixed", NOVA_ROT_A, "[0f,0f,0f]", 15, 16.0);
+                    invocarPantalla(s, "novaB", c[0], c[1], c[2], NOVA_SEQ[0], ESCALA_NOVA, "fixed", NOVA_ROT_B, "[0f,0f,0f]", 15, 16.0);
                 },
                 (s, r, js, t) -> {
                     final int aviso = 300;                            // 15 s para cubrirse
@@ -357,36 +357,25 @@ public final class Eventos {
             cmd(s, String.format(Locale.ROOT, "tp @e[tag=%s,limit=1] %.2f %.2f %.2f", tag, c[0], c[1], c[2]));
     }
 
-    /** Anima la supernova gigante del cielo: crece la gigante roja, colapsa, explota y queda la nebulosa. */
+    /** 38 fotogramas: 0-15 gigante roja creciendo, 16-17 colapso, 18-33 explosión, 34-37 nebulosa. */
+    private static final String[] NOVA_SEQ = glifos(0xE290, 38);
+    static final double ESCALA_NOVA = 330;
+
+    /** Fotograma de la supernova que toca en el tick t (-1 = no cambia). La pantalla NO cambia de tamaño. */
+    private static int fotoNova(int t, int aviso) {
+        int crecer = aviso - 20;
+        if (t < crecer) return Math.min(15, t * 16 / crecer);
+        if (t < aviso - 10) return 16;
+        if (t < aviso) return 17;
+        if (t < aviso + 48) return 18 + (t - aviso) / 3;
+        return 34 + ((t - aviso - 48) / 40) % 4;
+    }
+
+    /** Anima la supernova gigante del cielo cambiando solo el fotograma. */
     private static void novaGigante(MinecraftServer s, int t, int aviso) {
-        String glifo = null;
-        double escala = -1;
-        int dur = 40;
-        int paso = (aviso - 20) / 8;
-        if (t < aviso - 20 && t % paso == 0) {                              // la gigante roja crece sin parar
-            int f = Math.min(7, t / paso);
-            glifo = NOVA_ESTRELLA[f];
-            escala = 110 + 18 * (f + 1);
-            dur = paso;
-        } else if (t == aviso - 20 || t == aviso - 10) {                   // colapso: se encoge de golpe
-            glifo = NOVA_COLAPSO[t == aviso - 20 ? 0 : 1];
-            escala = t == aviso - 20 ? 140 : 110;
-            dur = 10;
-        } else if (t >= aviso && t < aviso + 48 && (t - aviso) % 3 == 0) {  // explosión fluida (16 fotogramas)
-            int f = (t - aviso) / 3;
-            glifo = NOVA_EXPL16[f];
-            escala = 180 + 9 * f;
-            dur = 3;
-        } else if (t >= aviso + 48 && (t - aviso - 48) % 40 == 0) {        // la nebulosa que queda
-            glifo = NOVA_NEBULOSA[((t - aviso - 48) / 40) % 4];
-            escala = 330;
-            dur = 40;
-        }
-        if (glifo == null) return;
-        for (String tag : new String[]{"novaA", "novaB"}) {
-            glifoPantalla(s, tag, glifo);
-            ondaEscala(s, tag, tag.equals("novaA") ? NOVA_ROT_A : NOVA_ROT_B, escala, dur);
-        }
+        int f = fotoNova(t, aviso);
+        if (t > 0 && f == fotoNova(t - 1, aviso)) return;
+        for (String tag : new String[]{"novaA", "novaB"}) glifoPantalla(s, tag, NOVA_SEQ[f]);
     }
 
     // ------------------------------------------------------------------ ayudas para otros archivos de eventos

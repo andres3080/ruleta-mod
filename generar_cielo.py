@@ -308,8 +308,54 @@ def explosion_suave(k, total=16):
 for fn in glob.glob(f"{FONT_DIR}/nova_expl16_*.png"): os.remove(fn)
 for k in range(16):
     glifo(f"nova_expl16_{k:02d}", explosion_suave(k), 0xE280 + k)
+
+# ---- Supernova en el cielo con TAMAÑO FIJO: el crecimiento va dentro de los fotogramas
+# (si se cambia la escala de la pantalla, la imagen se desliza porque no escala desde su centro)
+def nebulosa_brillante(i):
+    """Nebulosa luminosa (se dibuja sobre el cielo morado, así que necesita colores claros)."""
+    n1, n2, n3 = fbm(40 + i), fbm(50 + i), fbm(60 + i)
+    forma = np.clip(1 - (RAD / 118) ** 2, 0, 1)
+    d = np.clip((0.25 + n1 * 1.0) * forma, 0, 1)
+    fil = np.clip(1 - np.abs(n3 - 0.5) * 8, 0, 1) * forma
+    morado, azul, rosa = np.array([200, 120, 255]), np.array([110, 200, 255]), np.array([255, 110, 170])
+    m = np.clip(n2 * 1.4 - 0.2, 0, 1)[..., None]
+    rgb = morado * (1 - m) + azul * m
+    rgb = rgb * (1 - fil[..., None] * 0.8) + rosa * fil[..., None] * 0.8
+    centro = np.exp(-(RAD / 9) ** 2)
+    halo = np.exp(-(RAD / 34) ** 2)
+    rgb = rgb * (1 - centro[..., None]) + 255 * centro[..., None]
+    rgb = rgb * (1 - halo[..., None] * 0.4) + np.array([200, 220, 255]) * halo[..., None] * 0.4
+    a = np.clip(d * 0.85 + fil * 0.6 + centro + halo * 0.6, 0, 1) * np.clip(forma * 3, 0, 1)
+    return a_img(np.clip(rgb, 0, 255), a)
+
+ESC_FIJA = 330.0
+def encoger(img, escala_antes):
+    k = escala_antes / ESC_FIJA
+    t = max(2, round(N * k))
+    lienzo = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    peq = img.convert("RGBA").resize((t, t), Image.LANCZOS)
+    lienzo.alpha_composite(peq, ((N - t) // 2, (N - t) // 2))
+    return lienzo
+
+for fn in glob.glob(f"{FONT_DIR}/nova_seq_*.png"): os.remove(fn)
+seq = []
+for i in range(16):                                   # 0..15 la gigante roja crece
+    seq.append(encoger(estrella(min(7, i // 2)), 128 + 126 * i / 15))
+seq.append(encoger(colapso(0), 140))                  # 16, 17 colapso
+seq.append(encoger(colapso(1), 110))
+NEB = [nebulosa_brillante(i) for i in range(4)]
+for k in range(16):                                   # 18..33 explosión que se funde con la nebulosa
+    img = encoger(explosion_suave(k), 180 + 9 * k)
+    if k >= 10:
+        w = (k - 9) / 6
+        a1 = np.asarray(img).astype(float); a2 = np.asarray(NEB[0]).astype(float)
+        img = Image.fromarray((a1 * (1 - w) + a2 * w).astype(np.uint8), "RGBA")
+    seq.append(img)
+seq += NEB                                            # 34..37 nebulosa
+for n_, img in enumerate(seq):
+    glifo(f"nova_seq_{n_:02d}", img, 0xE290 + n_)
 datos = json.load(open(f"{PACK}/assets/minecraft/font/default.json"))
-nuevos = ("grieta_", "nova_expl16_")
+nuevos = ("grieta_", "nova_expl16_", "nova_seq_")
 datos["providers"] = [p for p in datos["providers"] if not any(k in p["file"] for k in nuevos)] + [p for p in prov if any(k in p["file"] for k in nuevos)]
 json.dump(datos, open(f"{PACK}/assets/minecraft/font/default.json", "w"), indent=2)
 
