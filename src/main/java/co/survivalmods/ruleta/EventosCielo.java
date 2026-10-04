@@ -24,7 +24,7 @@ final class EventosCielo {
 
     static final long HORA_SOL = 24000L * 2 + 18000;     // medianoche del día 2: luna (sol gigante) en lo más alto
     static final long HORA_GRIETA = 24000L * 5 + 5000;   // mañana del día 5: cielo morado
-    private static final String[] GRIETA = Eventos.glifosPublico(0xE250, 7);
+    private static final String[] GRIETA = Eventos.glifosPublico(0xE260, 25);
 
     static void registrar() {
         // ------------------------------------------------------------ TORMENTA SOLAR
@@ -77,12 +77,10 @@ final class EventosCielo {
                     Eventos.cmd(s, "weather clear");
                     Eventos.cmd(s, "time set " + HORA_GRIETA);
                     // la grieta: una "pantalla" horizontal gigante sobre el grupo (fija en el mundo, no sigue la cámara)
-                    double x = 0, y = 0, z = 0;
-                    for (ServerPlayer j : js) { x += j.getX(); y += j.getY(); z += j.getZ(); }
-                    int nj = Math.max(1, js.size());
-                    double alto = y / nj + 130;
+                    // a 45 bloques sobre el grupo (más arriba la niebla de la distancia de renderizado la borra)
+                    double[] c = Eventos.centroCielo(js);
                     for (String[] lado : new String[][]{{"grietaA", "[0.7071f,0f,0f,0.7071f]"}, {"grietaB", "[-0.7071f,0f,0f,0.7071f]"}}) {
-                        Eventos.invocarPantalla(s, lado[0], x / nj, alto, z / nj, GRIETA[0], 700, "fixed", lado[1], "[0f,0f,0f]", 15, 16.0);
+                        Eventos.invocarPantalla(s, lado[0], c[0], c[1], c[2], GRIETA[0], 230, "fixed", lado[1], "[0f,0f,0f]", 15, 16.0);
                     }
                     Map<UUID, Integer> corr = new HashMap<>();
                     for (ServerPlayer j : js) {
@@ -99,19 +97,20 @@ final class EventosCielo {
                     r.datos.put("corr", corr);
                 },
                 (s, r, js, t) -> {
-                    // el cielo se rasga: 6 etapas de apertura y luego las estrellas de dentro titilan
+                    // el cielo se rasga: 24 fotogramas (uno cada 2 ticks = 10 por segundo) y luego titilan las estrellas
+                    final int inicio = 20, fotos = 24;
                     int f = -1;
-                    if (t > 0 && t <= 125 && t % 25 == 0) f = t / 25;          // etapas 1..5
-                    else if (t > 125 && t % 30 == 0) f = (t / 30) % 2 == 0 ? 5 : 6;
-                    if (f >= 0) {
-                        for (String tag : new String[]{"grietaA", "grietaB"}) Eventos.glifoPantallaPublico(s, tag, GRIETA[f]);
-                        if (t <= 125) for (ServerPlayer j : js) {
-                            String n = Eventos.n(j);
-                            Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:entity.warden.sonic_charge master @s ~ ~ ~ 1 " + (0.5 + 0.08 * f));
-                            Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:block.glass.break master @s ~ ~ ~ 1 0.5");
-                            if (f == 5) Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:block.end_portal.spawn master @s ~ ~ ~ 1 0.5");
-                        }
+                    if (t >= inicio && t < inicio + fotos * 2 && (t - inicio) % 2 == 0) f = (t - inicio) / 2;
+                    else if (t >= inicio + fotos * 2 && t % 15 == 0) f = (t / 15) % 2 == 0 ? fotos - 1 : fotos;
+                    if (f >= 0) for (String tag : new String[]{"grietaA", "grietaB"}) Eventos.glifoPantallaPublico(s, tag, GRIETA[f]);
+                    if (t >= inicio && t < inicio + fotos * 2 && (t - inicio) % 8 == 0) for (ServerPlayer j : js) {
+                        String n = Eventos.n(j);
+                        Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:block.glass.break master @s ~ ~ ~ 1 " + (0.5 + (t - inicio) / 100.0));
+                        if (t == inicio) Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:entity.warden.sonic_charge master @s ~ ~ ~ 1 0.5");
                     }
+                    if (t == inicio + fotos * 2) for (ServerPlayer j : js)
+                        Eventos.cmd(s, "execute as " + Eventos.n(j) + " at @s run playsound minecraft:block.end_portal.spawn master @s ~ ~ ~ 1 0.5");
+                    if (t % 10 == 0) Eventos.seguirGrupo(s, js, "grietaA", "grietaB");
                     if (t % 40 == 0) {
                         for (ServerPlayer j : js) {
                             Eventos.cmd(s, String.format(Locale.ROOT, "particle minecraft:reverse_portal %.2f %.2f %.2f 12 6 12 0.02 120 force %s",

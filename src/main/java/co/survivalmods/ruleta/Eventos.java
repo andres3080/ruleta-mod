@@ -252,15 +252,15 @@ public final class Eventos {
                     cmd(s, "weather clear");
                     cmd(s, "time set " + horaLuna(FASE_ROJA));
                     // la estrella: un disco gigante fijo en lo alto del cielo, sobre el grupo (tapa casi todo el cielo)
-                    double x = 0, y = 0, z = 0;
-                    for (ServerPlayer j : js) { x += j.getX(); y += j.getY(); z += j.getZ(); }
-                    int nj = Math.max(1, js.size());
-                    invocarPantalla(s, "novaA", x / nj, y / nj + 140, z / nj, NOVA_ESTRELLA[0], 250, "fixed", NOVA_ROT_A, "[0f,0f,0f]", 15, 16.0);
-                    invocarPantalla(s, "novaB", x / nj, y / nj + 140, z / nj, NOVA_ESTRELLA[0], 250, "fixed", NOVA_ROT_B, "[0f,0f,0f]", 15, 16.0);
+                    // (a 45 bloques: más arriba la niebla de la distancia de renderizado la borra)
+                    double[] c = centroCielo(js);
+                    invocarPantalla(s, "novaA", c[0], c[1], c[2], NOVA_ESTRELLA[0], 110, "fixed", NOVA_ROT_A, "[0f,0f,0f]", 15, 16.0);
+                    invocarPantalla(s, "novaB", c[0], c[1], c[2], NOVA_ESTRELLA[0], 110, "fixed", NOVA_ROT_B, "[0f,0f,0f]", 15, 16.0);
                 },
                 (s, r, js, t) -> {
                     final int aviso = 300;                            // 15 s para cubrirse
                     novaGigante(s, t, aviso);
+                    if (t % 10 == 0) seguirGrupo(s, js, "novaA", "novaB");
                     if (t < aviso) {
                         double f = t / (double) aviso;
                         // el cielo se pone cada vez más rojo
@@ -281,8 +281,8 @@ public final class Eventos {
                     } else if (t == aviso + 1) {
                         // la onda blanca empieza a expandirse por todo el cielo
                         for (ServerPlayer j : js) {
-                            ondaEscala(s, "ondaA_" + n(j), "[-0.7071f,0f,0f,0.7071f]", 900, 45);
-                            ondaEscala(s, "ondaB_" + n(j), "[0.7071f,0f,0f,0.7071f]", 900, 45);
+                            ondaEscala(s, "ondaA_" + n(j), "[-0.7071f,0f,0f,0.7071f]", 420, 45);
+                            ondaEscala(s, "ondaB_" + n(j), "[0.7071f,0f,0f,0.7071f]", 420, 45);
                         }
                     } else if (t > aviso + 15 && t <= aviso + 45 && t % 3 == 0) {
                         // y se desvanece
@@ -298,9 +298,9 @@ public final class Eventos {
                     } else if (t == aviso) {
                         // onda expansiva: un anillo blanco enorme sobre cada jugador, que mira hacia abajo
                         for (ServerPlayer j : js) {
-                            invocarPantalla(s, "ondaA_" + n(j), j.getX(), j.getY() + 70, j.getZ(), ONDA, 15, "fixed",
+                            invocarPantalla(s, "ondaA_" + n(j), j.getX(), j.getY() + 40, j.getZ(), ONDA, 15, "fixed",
                                     "[-0.7071f,0f,0f,0.7071f]", "[0f,0f,0f]", 15, 16.0);
-                            invocarPantalla(s, "ondaB_" + n(j), j.getX(), j.getY() + 70, j.getZ(), ONDA, 15, "fixed",
+                            invocarPantalla(s, "ondaB_" + n(j), j.getX(), j.getY() + 40, j.getZ(), ONDA, 15, "fixed",
                                     "[0.7071f,0f,0f,0.7071f]", "[0f,0f,0f]", 15, 16.0);
                         }
                         // ¡EXPLOSIÓN!: la luna se vuelve un estallido blanco y la pantalla se pone blanca
@@ -338,27 +338,49 @@ public final class Eventos {
 
     private static final String NOVA_ROT_A = "[0.7071f,0f,0f,0.7071f]", NOVA_ROT_B = "[-0.7071f,0f,0f,0.7071f]";
 
+    private static final String[] NOVA_EXPL16 = glifos(0xE280, 16);
+    static final double ALTURA_CIELO = 45;
+
+    /** Centro del grupo, 45 bloques arriba: ahí se dibujan la supernova y la grieta. */
+    static double[] centroCielo(List<ServerPlayer> js) {
+        double x = 0, y = 0, z = 0;
+        for (ServerPlayer j : js) { x += j.getX(); y += j.getY(); z += j.getZ(); }
+        int nj = Math.max(1, js.size());
+        return new double[]{x / nj, y / nj + ALTURA_CIELO, z / nj};
+    }
+
+    /** Mueve suavemente las "pantallas" del cielo para que sigan al grupo (como la luna, siempre arriba). */
+    static void seguirGrupo(MinecraftServer s, List<ServerPlayer> js, String... tags) {
+        if (js.isEmpty()) return;
+        double[] c = centroCielo(js);
+        for (String tag : tags)
+            cmd(s, String.format(Locale.ROOT, "tp @e[tag=%s,limit=1] %.2f %.2f %.2f", tag, c[0], c[1], c[2]));
+    }
+
     /** Anima la supernova gigante del cielo: crece la gigante roja, colapsa, explota y queda la nebulosa. */
     private static void novaGigante(MinecraftServer s, int t, int aviso) {
         String glifo = null;
         double escala = -1;
         int dur = 40;
-        if (t < aviso - 20 && t % (aviso / 8) == 0) {                       // la gigante roja crece
-            int f = Math.min(7, t / (aviso / 8));
+        int paso = (aviso - 20) / 8;
+        if (t < aviso - 20 && t % paso == 0) {                              // la gigante roja crece sin parar
+            int f = Math.min(7, t / paso);
             glifo = NOVA_ESTRELLA[f];
-            escala = 250 + 45 * f;
+            escala = 110 + 18 * (f + 1);
+            dur = paso;
         } else if (t == aviso - 20 || t == aviso - 10) {                   // colapso: se encoge de golpe
             glifo = NOVA_COLAPSO[t == aviso - 20 ? 0 : 1];
-            escala = 300;
-            dur = 8;
-        } else if (t >= aviso && t <= aviso + 50 && (t - aviso) % 10 == 0) { // explosión que llena el cielo
-            int f = (t - aviso) / 10;
-            glifo = NOVA_EXPLOSION[f];
-            escala = f == 0 ? 700 : 750 + 30 * f;
-            dur = f == 0 ? 6 : 12;
-        } else if (t >= aviso + 60 && (t - aviso - 60) % 40 == 0) {        // la nebulosa que queda
-            glifo = NOVA_NEBULOSA[((t - aviso - 60) / 40) % 4];
-            escala = 900;
+            escala = t == aviso - 20 ? 140 : 110;
+            dur = 10;
+        } else if (t >= aviso && t < aviso + 48 && (t - aviso) % 3 == 0) {  // explosión fluida (16 fotogramas)
+            int f = (t - aviso) / 3;
+            glifo = NOVA_EXPL16[f];
+            escala = 180 + 9 * f;
+            dur = 3;
+        } else if (t >= aviso + 48 && (t - aviso - 48) % 40 == 0) {        // la nebulosa que queda
+            glifo = NOVA_NEBULOSA[((t - aviso - 48) / 40) % 4];
+            escala = 330;
+            dur = 40;
         }
         if (glifo == null) return;
         for (String tag : new String[]{"novaA", "novaB"}) {

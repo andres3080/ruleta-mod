@@ -1,3 +1,4 @@
+import glob
 """
 Imágenes para los eventos (supernova en el cielo y gas tóxico).
 Se agregan a la fuente del paquete y a las partículas. Ejecutar después de generar_rueda.py.
@@ -143,6 +144,10 @@ def nube_particula(i):
 
 prov = []
 def glifo(nombre, img, code, height=32, ascent=16):
+    # Minecraft guarda cada letra en un atlas de 256x256: una imagen más grande sale como un cuadro blanco
+    if max(img.size) > 256:
+        k = 256 / max(img.size)
+        img = img.resize((round(img.size[0] * k), round(img.size[1] * k)), Image.LANCZOS)
     img.save(f"{FONT_DIR}/{nombre}.png", optimize=True)
     prov.append({"type": "bitmap", "file": f"ruleta:font/{nombre}.png", "height": height, "ascent": ascent, "chars": [chr(code)]})
 
@@ -276,11 +281,36 @@ def grieta(f, variante=0):
     a = np.where(a < 0.11, 0, a)
     return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
 
-for i, f in enumerate([0.03, 0.12, 0.28, 0.5, 0.75, 1.0]):
-    glifo(f"grieta_{i}", grieta(f, 0), 0xE250 + i)
-glifo("grieta_6", grieta(1.0, 1), 0xE256)
+# 24 fotogramas de apertura (0xE260..0xE277) + 1 variante para que titilen las estrellas (0xE278)
+for fn in glob.glob(f"{FONT_DIR}/grieta_*.png"): os.remove(fn)
+GRIETA_FOTOS = 24
+for i in range(GRIETA_FOTOS):
+    x = (i + 1) / GRIETA_FOTOS
+    f = 0.02 + 0.98 * (1 - (1 - x) ** 2)          # se abre rápido y frena al final
+    glifo(f"grieta_{i:02d}", grieta(f, 0), 0xE260 + i)
+glifo("grieta_var", grieta(1.0, 1), 0xE260 + GRIETA_FOTOS)
+
+# Explosión fluida de la supernova: 16 fotogramas (0xE280..0xE28F) con la misma textura de gas
+def explosion_suave(k, total=16):
+    f = k / (total - 1)
+    fil = fbm(13)
+    radio = 18 + 100 * f
+    anillo = np.exp(-((RAD - radio) / (6 + 16 * f)) ** 2) * (0.6 + 0.6 * fil)
+    dentro = np.clip(1 - RAD / radio, 0, 1) * (0.35 + 0.5 * fil) * (1 - 0.5 * f)
+    centro = np.exp(-(RAD / (24 - 14 * f)) ** 2) * (1.6 - f)
+    flash = np.exp(-(RAD / 90) ** 2) * max(0, 1 - f * 4)
+    inten = np.clip(anillo + dentro + centro + flash, 0, 1.2)
+    calor = np.clip(1 - f * 1.1 + anillo * 0.3, 0, 1)[..., None]
+    caliente, frio = np.array([255, 245, 220]), np.array([255, 110, 40])
+    rgb = (caliente * calor + frio * (1 - calor)) * np.clip(inten, 0, 1)[..., None] ** 0.4
+    rgb = np.where((centro > 0.3)[..., None], 255, rgb)
+    return suave(rgb, inten, 25)
+for fn in glob.glob(f"{FONT_DIR}/nova_expl16_*.png"): os.remove(fn)
+for k in range(16):
+    glifo(f"nova_expl16_{k:02d}", explosion_suave(k), 0xE280 + k)
 datos = json.load(open(f"{PACK}/assets/minecraft/font/default.json"))
-datos["providers"] = [p for p in datos["providers"] if "grieta_" not in p["file"]] + [p for p in prov if "grieta_" in p["file"]]
+nuevos = ("grieta_", "nova_expl16_")
+datos["providers"] = [p for p in datos["providers"] if not any(k in p["file"] for k in nuevos)] + [p for p in prov if any(k in p["file"] for k in nuevos)]
 json.dump(datos, open(f"{PACK}/assets/minecraft/font/default.json", "w"), indent=2)
 
 prev = Image.new("RGBA", (256 * 6, 256 * 3), (6, 8, 20, 255))
@@ -291,7 +321,7 @@ for j, n in enumerate(["nova_explosion_3", "nova_explosion_5", "nova_nebulosa_0"
 for j, n in enumerate(["cielo_rojo_0", "cielo_rojo_3", "cielo_morado_0"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png").resize((512, 256)), (512 * j, 512))
 prev.alpha_composite(Image.open(f"{LUNA}/third_quarter.png").convert("RGBA"), (0, 512))
-for k, n in enumerate([2, 5]):
+for k, n in enumerate(["05", "23"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/grieta_{n}.png").resize((256, 256)), (256 * (k + 1), 512))
 for j, n in enumerate(["waning_crescent", "new_moon", "waxing_crescent"]):
     prev.alpha_composite(Image.open(f"{LUNA}/{n}.png").convert("RGBA"), (256 * (j + 3), 256 * 2))
