@@ -24,7 +24,7 @@ final class EventosCielo {
 
     static final long HORA_SOL = 24000L * 2 + 18000;     // medianoche del día 2: luna (sol gigante) en lo más alto
     static final long HORA_GRIETA = 24000L * 5 + 5000;   // mañana del día 5: cielo morado
-    private static final String[] GRIETA = Eventos.glifosPublico(0xE250, 4);
+    private static final String[] GRIETA = Eventos.glifosPublico(0xE250, 7);
 
     static void registrar() {
         // ------------------------------------------------------------ TORMENTA SOLAR
@@ -80,9 +80,9 @@ final class EventosCielo {
                     double x = 0, y = 0, z = 0;
                     for (ServerPlayer j : js) { x += j.getX(); y += j.getY(); z += j.getZ(); }
                     int nj = Math.max(1, js.size());
-                    double alto = y / nj + 110;
+                    double alto = y / nj + 130;
                     for (String[] lado : new String[][]{{"grietaA", "[0.7071f,0f,0f,0.7071f]"}, {"grietaB", "[-0.7071f,0f,0f,0.7071f]"}}) {
-                        Eventos.invocarPantalla(s, lado[0], x / nj, alto, z / nj, GRIETA[0], 60, "fixed", lado[1], "[0f,0f,0f]", 15, 16.0);
+                        Eventos.invocarPantalla(s, lado[0], x / nj, alto, z / nj, GRIETA[0], 700, "fixed", lado[1], "[0f,0f,0f]", 15, 16.0);
                     }
                     Map<UUID, Integer> corr = new HashMap<>();
                     for (ServerPlayer j : js) {
@@ -99,16 +99,18 @@ final class EventosCielo {
                     r.datos.put("corr", corr);
                 },
                 (s, r, js, t) -> {
-                    // la grieta se va abriendo
-                    if (t == 60 || t == 200 || t == 400) {
-                        int f = t == 60 ? 1 : t == 200 ? 2 : 3;
-                        for (String tag : new String[]{"grietaA", "grietaB"}) {
-                            Eventos.glifoPantallaPublico(s, tag, GRIETA[f]);
-                            Eventos.ondaEscala(s, tag, tag.equals("grietaA") ? "[0.7071f,0f,0f,0.7071f]" : "[-0.7071f,0f,0f,0.7071f]",
-                                    60 + 40 * f, 40);
+                    // el cielo se rasga: 6 etapas de apertura y luego las estrellas de dentro titilan
+                    int f = -1;
+                    if (t > 0 && t <= 125 && t % 25 == 0) f = t / 25;          // etapas 1..5
+                    else if (t > 125 && t % 30 == 0) f = (t / 30) % 2 == 0 ? 5 : 6;
+                    if (f >= 0) {
+                        for (String tag : new String[]{"grietaA", "grietaB"}) Eventos.glifoPantallaPublico(s, tag, GRIETA[f]);
+                        if (t <= 125) for (ServerPlayer j : js) {
+                            String n = Eventos.n(j);
+                            Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:entity.warden.sonic_charge master @s ~ ~ ~ 1 " + (0.5 + 0.08 * f));
+                            Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:block.glass.break master @s ~ ~ ~ 1 0.5");
+                            if (f == 5) Eventos.cmd(s, "execute as " + n + " at @s run playsound minecraft:block.end_portal.spawn master @s ~ ~ ~ 1 0.5");
                         }
-                        for (ServerPlayer j : js)
-                            Eventos.cmd(s, "execute as " + Eventos.n(j) + " at @s run playsound minecraft:entity.warden.sonic_charge master @s ~ ~ ~ 1 0.5");
                     }
                     if (t % 40 == 0) {
                         for (ServerPlayer j : js) {

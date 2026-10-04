@@ -188,9 +188,9 @@ def a_luna(img, nombre):
     Image.fromarray(np.dstack([rgb, np.full(rgb.shape[:2], 255)]).astype(np.uint8), "RGBA").save(f"{LUNA}/{nombre}.png")
 gigante = estrella(7).resize((330, 330), Image.LANCZOS)
 lienzo = Image.new("RGBA", (256, 256), (0, 0, 0, 0)); lienzo.alpha_composite(gigante.crop((37, 37, 293, 293)), (0, 0))
-a_luna(lienzo.resize((256, 256)), "waning_crescent")          # fase 3: gigante roja
-a_luna(explosion(3), "new_moon")                                # fase 4: explosión
-a_luna(nebulosa(0), "waxing_crescent")                          # fase 5: nebulosa
+# La supernova ahora es un disco gigante en el cielo (text_display), así que la luna de esas fases es invisible
+for nombre in ["waning_crescent", "new_moon", "waxing_crescent"]:
+    a_luna(Image.new("RGBA", (256, 256), (0, 0, 0, 0)), nombre)
 
 # ---- Tormenta solar: la fase "third_quarter" de la luna es un sol gigante
 def sol():
@@ -208,34 +208,77 @@ def sol():
     return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.full((N, N), 255)]).astype(np.uint8), "RGBA")
 sol().save(f"{LUNA}/third_quarter.png")
 
-# ---- La grieta: rajadura brillante (4 tamaños) que se ve desde abajo en el cielo
-def grieta(f):
-    rng2 = np.random.default_rng(77)
-    img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
-    from PIL import ImageDraw
-    d = ImageDraw.Draw(img)
-    largo = 55 + f * 22
-    pts = []
-    for k in range(25):
-        x = N / 2 - largo + 2 * largo * k / 24
-        y = N / 2 + rng2.normal(0, 6 + f * 3)
-        pts.append((x, y))
-    ramas = []
-    for k in range(3 + f * 2):
-        a = pts[rng2.integers(3, 22)]
-        b = (a[0] + rng2.normal(0, 25), a[1] + rng2.choice([-1, 1]) * (15 + rng2.random() * 25 + f * 8))
-        ramas.append((a, b))
-    for ancho, col in [(16 + f * 6, (120, 40, 220, 90)), (9 + f * 3, (190, 90, 255, 170)), (4 + f, (245, 220, 255, 255))]:
-        d.line(pts, fill=col, width=int(ancho), joint="curve")
-        for a, b in ramas:
-            d.line([a, b], fill=col, width=max(1, int(ancho * 0.5)))
-    img = img.filter(ImageFilter.GaussianBlur(1.2))
-    halo = img.filter(ImageFilter.GaussianBlur(10))
-    out = Image.new("RGBA", (N, N), (0, 0, 0, 0)); out.alpha_composite(halo); out.alpha_composite(halo); out.alpha_composite(img)
-    arr = np.asarray(out).astype(float); arr[..., 3] = np.where(arr[..., 3] < 28, 0, arr[..., 3])
-    return Image.fromarray(arr.astype(np.uint8), "RGBA")
-for f in range(4):
-    glifo(f"grieta_{f}", grieta(f), 0xE250 + f)
+# ---- La grieta: el cielo se rasga y por dentro se ve el espacio exterior (6 etapas + 1 variante)
+G = 512
+gy, gx = np.mgrid[0:G, 0:G]
+
+def espacio(semilla):
+    """Interior: espacio profundo con estrellas, nebulosa y una galaxia."""
+    r = np.random.default_rng(semilla)
+    def nz(esc, k):
+        b = np.random.default_rng(semilla * 10 + k).random((G // esc + 2, G // esc + 2))
+        return np.asarray(Image.fromarray((b * 255).astype(np.uint8)).resize((G, G), Image.BICUBIC)).astype(float) / 255
+    n = nz(64, 1) * 0.5 + nz(32, 2) * 0.3 + nz(16, 3) * 0.2
+    m = nz(48, 4)
+    base = np.dstack([np.full((G, G), 4.0), np.full((G, G), 3.0), np.full((G, G), 14.0)])
+    neb = np.clip((n - 0.45) * 2.2, 0, 1)[..., None]
+    col = np.array([120, 40, 200]) * (1 - m[..., None]) + np.array([30, 140, 230]) * m[..., None]
+    rgb = base + col * neb * 0.85
+    # galaxia espiral pequeña
+    cx, cy = G * 0.62, G * 0.47
+    dx, dy = gx - cx, (gy - cy) * 2.2
+    rr = np.hypot(dx, dy); th = np.arctan2(dy, dx)
+    brazo = np.clip(np.cos(2 * th - rr / 9) * 0.5 + 0.5, 0, 1) ** 3 * np.exp(-rr / 38)
+    rgb += np.array([255, 230, 200]) * (brazo * 0.9 + np.exp(-(rr / 7) ** 2))[..., None]
+    # estrellas
+    est = r.random((G, G))
+    for umbral, brillo in [(0.9993, 255), (0.997, 160)]:
+        m2 = est > umbral
+        rgb[m2] = np.maximum(rgb[m2], brillo)
+    return np.clip(rgb, 0, 255)
+
+ESPACIO = [espacio(5), espacio(6)]
+
+def borde_ruido(semilla, n):
+    r = np.random.default_rng(semilla)
+    v = r.normal(0, 1, n)
+    for _ in range(12): v = (np.roll(v, 1) + v + np.roll(v, -1)) / 3
+    v = v / (np.abs(v).max() + 1e-9) * 1.6
+    dientes = np.zeros(n)
+    for c in r.integers(0, n, 40):                 # picos del rasgado
+        w = r.integers(3, 9)
+        dientes += np.clip(1 - np.abs(np.arange(n) - c) / w, 0, 1) * r.uniform(0.6, 1.6)
+    return v + dientes
+
+RUIDO_A, RUIDO_B = borde_ruido(11, G), borde_ruido(12, G)
+
+def grieta(f, variante=0):
+    """f: 0..1 qué tan abierta está."""
+    largo = 0.30 + 0.62 * min(1, f * 1.6)          # fracción del ancho
+    abre = 4 + 150 * f ** 1.2                       # apertura máxima en px
+    x0, x1 = G / 2 - largo * G / 2, G / 2 + largo * G / 2
+    t = np.clip((gx[0] - x0) / (x1 - x0), 0, 1)
+    perfil = np.sin(np.pi * t) ** 0.75 * ((gx[0] >= x0) & (gx[0] <= x1))
+    curva = np.sin(t * np.pi * 1.3 + 0.4) * 22 * (0.4 + f)       # la grieta no es recta
+    arriba = G / 2 + curva - abre * perfil * 0.55 - np.abs(RUIDO_A) * (3 + 9 * f) * perfil
+    abajo = G / 2 + curva + abre * perfil * 0.45 + np.abs(RUIDO_B) * (3 + 9 * f) * perfil
+    dentro = (gy > arriba[None, :]) & (gy < abajo[None, :])
+    # distancia aproximada al borde (vertical) para el brillo del filo
+    d = np.minimum(np.abs(gy - arriba[None, :]), np.abs(gy - abajo[None, :]))
+    suave_x = np.clip(perfil, 0, 1)[None, :] ** 0.5
+    filo = np.exp(-d / (3 + 5 * f)) * suave_x
+    halo = np.exp(-d / (14 + 30 * f)) * suave_x * (~dentro)
+    rgb = np.zeros((G, G, 3))
+    rgb[dentro] = ESPACIO[variante][dentro] * min(1, 0.4 + f)
+    glow = np.array([240, 200, 255]) * filo[..., None] + np.array([170, 60, 255]) * halo[..., None]
+    rgb = np.clip(rgb + glow, 0, 255)
+    a = np.where(dentro, 1.0, np.clip(filo * 1.2 + halo * 0.8, 0, 1))
+    a = np.where(a < 0.11, 0, a)
+    return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
+
+for i, f in enumerate([0.03, 0.12, 0.28, 0.5, 0.75, 1.0]):
+    glifo(f"grieta_{i}", grieta(f, 0), 0xE250 + i)
+glifo("grieta_6", grieta(1.0, 1), 0xE256)
 datos = json.load(open(f"{PACK}/assets/minecraft/font/default.json"))
 datos["providers"] = [p for p in datos["providers"] if "grieta_" not in p["file"]] + [p for p in prov if "grieta_" in p["file"]]
 json.dump(datos, open(f"{PACK}/assets/minecraft/font/default.json", "w"), indent=2)
@@ -248,8 +291,8 @@ for j, n in enumerate(["nova_explosion_3", "nova_explosion_5", "nova_nebulosa_0"
 for j, n in enumerate(["cielo_rojo_0", "cielo_rojo_3", "cielo_morado_0"]):
     prev.alpha_composite(Image.open(f"{FONT_DIR}/{n}.png").resize((512, 256)), (512 * j, 512))
 prev.alpha_composite(Image.open(f"{LUNA}/third_quarter.png").convert("RGBA"), (0, 512))
-for k in range(2):
-    prev.alpha_composite(Image.open(f"{FONT_DIR}/grieta_{k*3}.png"), (256 * (k + 1), 512))
+for k, n in enumerate([2, 5]):
+    prev.alpha_composite(Image.open(f"{FONT_DIR}/grieta_{n}.png").resize((256, 256)), (256 * (k + 1), 512))
 for j, n in enumerate(["waning_crescent", "new_moon", "waxing_crescent"]):
     prev.alpha_composite(Image.open(f"{LUNA}/{n}.png").convert("RGBA"), (256 * (j + 3), 256 * 2))
 prev.save("preview_eventos.png")

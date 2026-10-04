@@ -251,9 +251,16 @@ public final class Eventos {
                     supernovaActiva = true;   // el cielo cambia de color con data/ruleta/timeline/supernova.json
                     cmd(s, "weather clear");
                     cmd(s, "time set " + horaLuna(FASE_ROJA));
+                    // la estrella: un disco gigante fijo en lo alto del cielo, sobre el grupo (tapa casi todo el cielo)
+                    double x = 0, y = 0, z = 0;
+                    for (ServerPlayer j : js) { x += j.getX(); y += j.getY(); z += j.getZ(); }
+                    int nj = Math.max(1, js.size());
+                    invocarPantalla(s, "novaA", x / nj, y / nj + 140, z / nj, NOVA_ESTRELLA[0], 250, "fixed", NOVA_ROT_A, "[0f,0f,0f]", 15, 16.0);
+                    invocarPantalla(s, "novaB", x / nj, y / nj + 140, z / nj, NOVA_ESTRELLA[0], 250, "fixed", NOVA_ROT_B, "[0f,0f,0f]", 15, 16.0);
                 },
                 (s, r, js, t) -> {
                     final int aviso = 300;                            // 15 s para cubrirse
+                    novaGigante(s, t, aviso);
                     if (t < aviso) {
                         double f = t / (double) aviso;
                         // el cielo se pone cada vez más rojo
@@ -284,7 +291,10 @@ public final class Eventos {
                             cmd(s, "data merge entity @e[tag=ondaA_" + n(j) + ",limit=1] {text_opacity:" + (byte) Math.max(26, op) + "b}");
                             cmd(s, "data merge entity @e[tag=ondaB_" + n(j) + ",limit=1] {text_opacity:" + (byte) Math.max(26, op) + "b}");
                         }
-                        if (t >= aviso + 45) cmd(s, "kill @e[tag=" + TAG + ",type=minecraft:text_display]");
+                        if (t >= aviso + 45) for (ServerPlayer j : js) {
+                            cmd(s, "kill @e[tag=ondaA_" + n(j) + "]");
+                            cmd(s, "kill @e[tag=ondaB_" + n(j) + "]");
+                        }
                     } else if (t == aviso) {
                         // onda expansiva: un anillo blanco enorme sobre cada jugador, que mira hacia abajo
                         for (ServerPlayer j : js) {
@@ -324,6 +334,37 @@ public final class Eventos {
                     for (ServerPlayer j : js) cmd(s, "title " + n(j) + " clear");
                     supernovaActiva = false;
                 }));
+    }
+
+    private static final String NOVA_ROT_A = "[0.7071f,0f,0f,0.7071f]", NOVA_ROT_B = "[-0.7071f,0f,0f,0.7071f]";
+
+    /** Anima la supernova gigante del cielo: crece la gigante roja, colapsa, explota y queda la nebulosa. */
+    private static void novaGigante(MinecraftServer s, int t, int aviso) {
+        String glifo = null;
+        double escala = -1;
+        int dur = 40;
+        if (t < aviso - 20 && t % (aviso / 8) == 0) {                       // la gigante roja crece
+            int f = Math.min(7, t / (aviso / 8));
+            glifo = NOVA_ESTRELLA[f];
+            escala = 250 + 45 * f;
+        } else if (t == aviso - 20 || t == aviso - 10) {                   // colapso: se encoge de golpe
+            glifo = NOVA_COLAPSO[t == aviso - 20 ? 0 : 1];
+            escala = 300;
+            dur = 8;
+        } else if (t >= aviso && t <= aviso + 50 && (t - aviso) % 10 == 0) { // explosión que llena el cielo
+            int f = (t - aviso) / 10;
+            glifo = NOVA_EXPLOSION[f];
+            escala = f == 0 ? 700 : 750 + 30 * f;
+            dur = f == 0 ? 6 : 12;
+        } else if (t >= aviso + 60 && (t - aviso - 60) % 40 == 0) {        // la nebulosa que queda
+            glifo = NOVA_NEBULOSA[((t - aviso - 60) / 40) % 4];
+            escala = 900;
+        }
+        if (glifo == null) return;
+        for (String tag : new String[]{"novaA", "novaB"}) {
+            glifoPantalla(s, tag, glifo);
+            ondaEscala(s, tag, tag.equals("novaA") ? NOVA_ROT_A : NOVA_ROT_B, escala, dur);
+        }
     }
 
     // ------------------------------------------------------------------ ayudas para otros archivos de eventos
